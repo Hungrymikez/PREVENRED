@@ -9,7 +9,7 @@ está indexado.
 consecutivo para que no pueda nacer sin esa garantía. Es PARCIAL (`$type: string`):
 los documentos sin `caseId` no participan y no chocan entre sí por un valor nulo.
 
-Las colecciones que ya tienen código (`incidents`, `properties`, `aidNeeds`) definen
+Las colecciones que ya tienen código (`incidents`, `properties`, `aid_needs`) definen
 su propio `uq_*_case` en su contexto, con su nombre y sus opciones: no se repiten
 aquí, porque dos índices distintos sobre el mismo campo harían fallar el arranque.
 """

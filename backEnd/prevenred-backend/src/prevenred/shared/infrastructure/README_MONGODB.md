@@ -247,6 +247,7 @@ Válidas para **todos** los repositorios (`docs/09_rectificacion_bd_mongodb.md` 
 
 | Tema | Convención |
 |---|---|
+| Nombres de colección | **`snake_case`**: `password_resets`, `aid_needs`, `map_layers`, `property_inspections`, `transactions`… El nombre vive en **una sola constante** de su repositorio (§6) |
 | Nombres de campo | **BD en `camelCase`** (`caseId`, `reportedBy`, `createdAt`); **Python en `snake_case`** (`case_id`, `reported_by`, `created_at`) |
 | Identificador | `_id` es `ObjectId` en Mongo; en el dominio es `str` de 24 hex, así el dominio no importa `bson` |
 | Referencias | Campos `...Id` se guardan como `ObjectId` mediante `to_reference()`; `None` si no aplica |
@@ -254,6 +255,7 @@ Válidas para **todos** los repositorios (`docs/09_rectificacion_bd_mongodb.md` 
 | Enums / estados | Se guardan como **String en MAYÚSCULAS** (`"ACTIVE"`, `"SUSPENDED"`, `"PENDIENTE"`, `"VERIFICADO"`, `"BLOQUEADO"`, `"EXPIRADO"`) |
 | Roles | `roles` es un **arreglo de códigos** `["TECNICO", "VOLUNTARIO"]`, no `ObjectId` (hallazgo H-01). Guarda **todos** los roles, sin repetir y de **mayor a menor privilegio** |
 | Geolocalización | `location` es un **GeoJSON Point**: `{"type": "Point", "coordinates": [longitud, latitud]}` |
+| Barrio/comuna | En `users` es un campo **raíz** `neighborhood` (texto), **fuera** de `location` (§5.3) |
 
 > ⚠️ Detalle que muerde: en GeoJSON el orden es **[longitud, latitud]**. En `incidents` el mapeo lo hace
 > explícito: `"coordinates": [i.longitude, i.latitude]`, y al leer `latitude = point[1]`, `longitude = point[0]`.
@@ -272,7 +274,8 @@ Así queda un documento recién creado (verificado ejecutando el repositorio):
   "roles":          ["TECNICO", "VOLUNTARIO"],
   "status":         "ACTIVE",
   "verified":       false,
-  "location":       { "neighborhood": "Centro" },
+  "neighborhood":   "Centro",
+  "location":       null,
   "consent":        { "privacyNoticeVersion": "v1", "acceptedAt": "<Date>", "preciseLocationGranted": false },
   "security":       { "failedLoginAttempts": 0, "lockedUntil": null,
                       "mfa": { "enabled": false, "secretEnc": null } },
@@ -287,6 +290,7 @@ otros casos de uso). El id **se genera en el dominio**, no en Mongo: `Entity.id`
 `default_factory=new_id` (`shared/domain/ids.py`), y el repositorio lo escribe explícitamente con
 `ObjectId(u.id)`. Por eso la entidad ya tiene id **antes** de guardarse y se puede emitir
 `UserRegistered(user_id=...)` con él.
+
 
 ### 5.2 Multirrol: el arreglo completo se guarda y el efectivo se calcula
 
@@ -323,6 +327,41 @@ Consecuencias prácticas:
 > Sigue en pie: un documento guardado con códigos en minúsculas (`"tecnico"`) hace lanzar `Role("tecnico")`
 > al leer. Ver §12.2.
 
+### 5.3 `neighborhood` en la raíz y `location` como GeoJSON
+
+`docs/EQUIVALENCIAS_BD.md` §2 (fila «Ubicación») dejó dos campos con responsabilidades separadas:
+
+| Campo | Qué guarda | Tipo |
+|---|---|---|
+| `neighborhood` | El **barrio/comuna** que la persona declara (RN-05: nunca la dirección exacta) | `String` en la **raíz** |
+| `location` | Sólo la **coordenada**, si algún día se concede ubicación precisa | GeoJSON `Point` **o `null`** |
+
+```json
+{ "neighborhood": "Centro", "location": null }                                   // alta normal
+{ "neighborhood": "Centro", "location": {"type": "Point", "coordinates": [-75.69, 4.81]} }
+```
+
+Cómo lo resuelve `mongo_user_repository.py`:
+
+| Pieza | Qué hace |
+|---|---|
+| `_to_document()` | Escribe `"neighborhood": u.neighborhood` y `"location": None`. `identity` todavía **no** captura coordenadas (eso es CU-01 paso de ubicación precisa), así que la ubicación nace en `null` |
+| `_mutable_fields()` | El `$set` apunta a **`neighborhood`**, no a `location.neighborhood`: así un `update()` no vuelve a crear el objeto de barrio dentro del GeoJSON |
+| `_neighborhood_from_document()` | **Lee primero** la raíz y, si no está, `location.neighborhood` (documentos viejos). Devuelve `""` como mucho: ningún documento antiguo rompe el login |
+
+> ⚠️ **Documentos viejos**: hay usuarios guardados como `{"location": {"neighborhood": "Centro"}}`. Se siguen
+> leyendo bien (no hay migración en el repo), pero en cuanto se actualicen con `repo.update()` quedarán con el
+> barrio en la raíz. Una consulta de `mongosh` que filtre por barrio debe mirar **ambos** sitios mientras
+> existan documentos sin migrar:
+>
+> ```js
+> db.users.find({ $or: [ { neighborhood: "Centro" }, { "location.neighborhood": "Centro" } ] })
+> ```
+>
+> El índice `ix_users_neighborhood` (§7.1) sólo indexa la raíz; para los documentos viejos el truco anterior
+> recorre la colección. Si la colección crece, conviene un script de migración que copie
+> `location.neighborhood` → `neighborhood` y deje `location` en `null`.
+
 
 ---
 
@@ -331,26 +370,30 @@ Consecuencias prácticas:
 Hay **17 adaptadores** en `infrastructure/`. Todos heredan de `BaseMongoRepository` salvo dos excepciones
 marcadas, que escriben con PyMongo directo porque no mapean una sola entidad.
 
-| Contexto | Archivo | Clase | Puerto (dominio) | Colección | Entidad |
-|---|---|---|---|---|---|
-| identity | `identity/infrastructure/mongo_user_repository.py` | `MongoUserRepository` | `UserDirectory` | `users` | `User` |
-| identity | `identity/infrastructure/mongo_auth_repository.py` | `MongoSessionRepository` | `SessionRepository` | `sessions` | `Session` |
-| identity | `identity/infrastructure/mongo_auth_repository.py` | `MongoPasswordResetRepository` | `PasswordResetRepository` | `passwordResets` | `PasswordReset` |
-| identity | `identity/infrastructure/mongo_mfa_challenge_repository.py` | `MongoMfaChallengeRepository` | `MfaChallengeRepository` | `mfaChallenges` | `MfaChallenge` |
-| identity | `identity/infrastructure/mongo_role_audit.py` ⚠️ | `MongoRoleAssignmentAudit` | `RoleAssignmentAudit` | `audit_logs` | *ninguna* (sólo inserta) |
-| incidents | `incidents/infrastructure/mongo_incident_repository.py` | `MongoIncidentRepository` | `IncidentRepository` | `incidents` | `Incident` |
-| fieldwork | `fieldwork/infrastructure/mongo_property_repository.py` | `MongoPropertyRepository` | `PropertyRepository` | `properties` | `Property` |
-| fieldwork | `fieldwork/infrastructure/mongo_inspection_repository.py` | `MongoInspectionRepository` | `InspectionRepository` | `propertyInspections` | `Inspection` |
-| services | `services/infrastructure/mongo_technician_repository.py` | `MongoTechnicianRepository` | `TechnicianRepository` | `technicians` | `TechnicianProfile` |
-| marketplace | `marketplace/infrastructure/mongo_marketplace_repository.py` | `MongoReservationRepository` | `ReservationRepository` | `reservations` | `Reservation` |
-| marketplace | `marketplace/infrastructure/mongo_marketplace_repository.py` | `MongoTransactionRepository` | `TransactionRepository` | `toolTransactions` | `ToolTransaction` |
-| wellbeing | `wellbeing/infrastructure/mongo_wellbeing_repository.py` | `MongoConsentRepository` | `ConsentRepository` | `wellbeingConsents` | `Consent` |
-| wellbeing | `wellbeing/infrastructure/mongo_wellbeing_repository.py` | `MongoSurveyRepository` ⚠️ | `SurveyRepository` | `wellbeingSurveys` | `SurveyResponse` |
-| aid | `aid/infrastructure/mongo_aid_repository.py` | `MongoAidNeedRepository` | `AidNeedRepository` | `aidNeeds` | `AidNeed` |
-| aid | `aid/infrastructure/mongo_aid_repository.py` | `MongoAidInventoryRepository` | `AidInventoryRepository` | `aidInventory` | `AidInventoryItem` |
-| geo | `geo/infrastructure/mongo_map_layer_repository.py` | `MongoMapLayerRepository` | `MapLayerRepository` | `mapLayers` | `MapLayer` |
-| notifications | `notifications/infrastructure/mongo_notification_repository.py` | `MongoNotificationRepository` | `NotificationRepository` | `notifications` | `Notification` |
-| media | `media/infrastructure/mongo_file_repository.py` | `MongoFileRepository` | `FileRepository` | `files` | `StoredFile` |
+La columna **Constante** es la **única** definición del nombre de la colección: su `indexes.py` y las
+pruebas la importan en lugar de repetir la cadena (`tests/test_collection_names.py` lo verifica). El nombre
+va en **`snake_case`** (`docs/EQUIVALENCIAS_BD.md`), igual que en `docs/db/*.md`.
+
+| Contexto | Archivo | Clase | Puerto (dominio) | Constante | Colección | Entidad |
+|---|---|---|---|---|---|---|
+| identity | `identity/infrastructure/mongo_user_repository.py` | `MongoUserRepository` | `UserDirectory` | `COLLECTION` | `users` | `User` |
+| identity | `identity/infrastructure/mongo_auth_repository.py` | `MongoSessionRepository` | `SessionRepository` | `SESSIONS` | `sessions` | `Session` |
+| identity | `identity/infrastructure/mongo_auth_repository.py` | `MongoPasswordResetRepository` | `PasswordResetRepository` | `PASSWORD_RESETS` | `password_resets` | `PasswordReset` |
+| identity | `identity/infrastructure/mongo_mfa_challenge_repository.py` | `MongoMfaChallengeRepository` | `MfaChallengeRepository` | `COLLECTION` | `mfa_challenges` | `MfaChallenge` |
+| identity | `identity/infrastructure/mongo_role_audit.py` ⚠️ | `MongoRoleAssignmentAudit` | `RoleAssignmentAudit` | — | `audit_logs` | *ninguna* (sólo inserta) |
+| incidents | `incidents/infrastructure/mongo_incident_repository.py` | `MongoIncidentRepository` | `IncidentRepository` | `COLLECTION` | `incidents` | `Incident` |
+| fieldwork | `fieldwork/infrastructure/mongo_property_repository.py` | `MongoPropertyRepository` | `PropertyRepository` | `COLLECTION` | `properties` | `Property` |
+| fieldwork | `fieldwork/infrastructure/mongo_inspection_repository.py` | `MongoInspectionRepository` | `InspectionRepository` | `COLLECTION` | `property_inspections` | `Inspection` |
+| services | `services/infrastructure/mongo_technician_repository.py` | `MongoTechnicianRepository` | `TechnicianRepository` | `COLLECTION` | `technicians` | `TechnicianProfile` |
+| marketplace | `marketplace/infrastructure/mongo_marketplace_repository.py` | `MongoReservationRepository` | `ReservationRepository` | `RESERVATIONS` | `reservations` | `Reservation` |
+| marketplace | `marketplace/infrastructure/mongo_marketplace_repository.py` | `MongoTransactionRepository` | `TransactionRepository` | `TRANSACTIONS` | `transactions` | `ToolTransaction` |
+| wellbeing | `wellbeing/infrastructure/mongo_wellbeing_repository.py` | `MongoConsentRepository` | `ConsentRepository` | `CONSENTS` | `wellbeing_consents` | `Consent` |
+| wellbeing | `wellbeing/infrastructure/mongo_wellbeing_repository.py` | `MongoSurveyRepository` ⚠️ | `SurveyRepository` | `SURVEYS` | `wellbeing_surveys` | `SurveyResponse` |
+| aid | `aid/infrastructure/mongo_aid_repository.py` | `MongoAidNeedRepository` | `AidNeedRepository` | `NEEDS_COLLECTION` | `aid_needs` | `AidNeed` |
+| aid | `aid/infrastructure/mongo_aid_repository.py` | `MongoAidInventoryRepository` | `AidInventoryRepository` | `INVENTORY_COLLECTION` | `aid_inventory` | `AidInventoryItem` |
+| geo | `geo/infrastructure/mongo_map_layer_repository.py` | `MongoMapLayerRepository` | `MapLayerRepository` | `COLLECTION` | `map_layers` | `MapLayer` |
+| notifications | `notifications/infrastructure/mongo_notification_repository.py` | `MongoNotificationRepository` | `NotificationRepository` | `COLLECTION` | `notifications` | `Notification` |
+| media | `media/infrastructure/mongo_file_repository.py` | `MongoFileRepository` | `FileRepository` | `COLLECTION` | `files` | `StoredFile` |
 
 ⚠️ **Excepciones al patrón:**
 - `MongoSurveyRepository` **no** hereda de `BaseMongoRepository` a propósito: una respuesta de bienestar
@@ -361,24 +404,33 @@ marcadas, que escriben con PyMongo directo porque no mapean una sola entidad.
 
 ### 6.1 Colecciones con código hoy vs. documentadas sin código
 
-`docs/db/_indice.md` lista 34 colecciones (los 31 del doc 09 más `sessions`, `passwordResets`,
-`wellbeingConsents`, `wellbeing_indicators` y `mfaChallenges`). **18 tienen código hoy**: las 17 con
+`docs/db/_indice.md` lista 34 colecciones (los 31 del doc 09 más `sessions`, `password_resets`,
+`wellbeing_consents`, `wellbeing_indicators` y `mfa_challenges`). **18 tienen código hoy**: las 17 con
 repositorio propio más `counters` (§7.2), que no es un repositorio sino el generador de consecutivos.
 Las demás están diseñadas pero todavía no implementadas — relevantes porque el doc 09 habla de ellas y
 alguien podría buscarlas en el código:
 
 | Sin implementar (diseñadas) | Notas |
 |---|---|
-| `roles`, `catalogs`, `operationalModes` | Catálogos y modo vigente |
-| `materials`, `tools`, `reviews`, `serviceRequests`, `quotes` | Marketplace y servicios |
-| `donations`, `donationMatches` | Aid (sólo existen `aidNeeds` y `aidInventory`) |
+| `roles`, `catalogs`, `operational_modes` | Catálogos y modo vigente |
+| `resources`, `reviews`, `service_requests` | Marketplace, servicios y cotizaciones embebidas |
+| `donations`, `donation_matches` | Aid (sólo existen `aid_needs` y `aid_inventory`) |
 | `volunteers`, `assignments` | Voluntariado |
-| `incidentStatusHistory` | El historial de estados de `incidents` |
-| `nlpAnalysis`, `supportRequests`, `wellbeingIndicators` | Bienestar |
+| `wellbeing_indicators` | Bienestar |
+| `audit_logs` | Sin repositorio propio: `identity` sólo inserta en ella (⚠️ en la tabla §6) |
 
-> Los nombres en el código son **camelCase** (`aidNeeds`, `mapLayers`, `passwordResets`,
-> `toolTransactions`), aunque `docs/db/*.md` y el doc 09 los escriban en snake_case (`aid_needs`,
-> `map_layers`, `password_resets`, `transactions`). **Manda el código**: es lo que existe en la base.
+> Los nombres son **`snake_case`** en el código y en `docs/db/*.md`, igual que en `docs/EQUIVALENCIAS_BD.md`.
+> Antes el código usaba camelCase (`aidNeeds`, `mapLayers`, `passwordResets`…); el renombrado está hecho y
+> `tests/test_collection_names.py` falla si alguien vuelve a escribir un nombre viejo. Ver §12.4.
+>
+> Las colecciones que ya tenían código **conservan su diseño**: del `EQUIVALENCIAS_BD` sólo se aplicó el
+> cambio de nombre. Las que siguen «Pendiente» en ese documento deben seguir **la forma de Camilo**
+> (`donations` + `donation_matches` embebidos, `service_requests` con `cotizaciones[]`, `resources` única con
+> `type`, etc.) cuando se programen.
+
+Colecciones que sólo existen en el doc 09 (no en PrevenRED2 ni en el código): `materials`, `tools`, `quotes`,
+`incident_status_history` (el historial de `incidents` va embebido en `historial_estados[]`) y `nlp_analysis`
+(embebido en `wellbeing_surveys`).
 
 ---
 
@@ -387,6 +439,9 @@ alguien podría buscarlas en el código:
 Un `indexes.py` por contexto. Todos exponen `ensure_indexes(db: Database) -> None` y `main.py` los llama
 al arrancar. **En MongoDB la unicidad la garantiza el índice, no el código**: por eso hay `DuplicateKeyError`
 traducido a `ConflictError` en la capa base, y por eso los tests corren `ensure_indexes` aunque usen mongomock.
+
+Cada `indexes.py` **importa la constante** del nombre de colección desde el repositorio que la posee
+(§6), así el nombre no está escrito dos veces: si mañana cambia, cambia en un solo sitio.
 
 Nomenclatura usada en todo el proyecto:
 
@@ -404,32 +459,38 @@ Nomenclatura usada en todo el proyecto:
 | `users` | `email` → `uq_users_email` | **único** | No repetir correo; E1 de CU-01 |
 | `users` | `status` → `ix_users_status` | normal | Filtrar activos/suspendidos |
 | `users` | `roles + status` → `ix_users_role_status` | compuesto | CU-08 E1: contar administradores activos sin escanear todo |
+| `users` | `neighborhood` → `ix_users_neighborhood` | normal | Agrupar cuentas por barrio/comuna (campo **raíz**, §5.3) |
 | `sessions` | `jti` → `uq_sessions_jti` | **único** | Un `jti` = un token emitido (CU-02 A4) |
 | `sessions` | `userId` → `ix_sessions_user` | normal | Sesiones de una persona |
 | `sessions` | `expiresAt` → `ttl_sessions_expires` | **TTL** | Borrar sesiones vencidas sin código |
-| `passwordResets` | `tokenHash` → `uq_password_resets_hash` | **único** | Se busca por hash, nunca por token |
-| `passwordResets` | `userId` → `ix_password_resets_user` | normal | Enlaces de una persona |
-| `passwordResets` | `expiresAt` → `ttl_password_resets_expires` | **TTL** | Los enlaces vencen solos |
-| `passwordResets` | `userId + createdAt` → `ix_password_resets_user_created` | compuesto | Listar/auditar |
-| `mfaChallenges` | `userId + purpose + status + verifiedAt` → `ix_mfa_challenges_user_purpose_status` | compuesto | Un índice sirve a las dos consultas de CU-03 |
-| `mfaChallenges` | `expiresAt` → `ttl_mfa_challenges_expires` | **TTL** | Desafíos vencidos fuera |
+| `password_resets` | `tokenHash` → `uq_password_resets_hash` | **único** | Se busca por hash, nunca por token |
+| `password_resets` | `userId` → `ix_password_resets_user` | normal | Enlaces de una persona |
+| `password_resets` | `expiresAt` → `ttl_password_resets_expires` | **TTL** | Los enlaces vencen solos |
+| `password_resets` | `userId + createdAt` → `ix_password_resets_user_created` | compuesto | Listar/auditar |
+| `mfa_challenges` | `userId + purpose + status + verifiedAt` → `ix_mfa_challenges_user_purpose_status` | compuesto | Un índice sirve a las dos consultas de CU-03 |
+| `mfa_challenges` | `expiresAt` → `ttl_mfa_challenges_expires` | **TTL** | Desafíos vencidos fuera |
 | `audit_logs` | `actorId + createdAt` → `ix_audit_actor_created` | compuesto | Auditoría por actor |
 | `audit_logs` | `resource + resourceId + createdAt` → `ix_audit_resource` | compuesto | Auditoría por recurso afectado |
 
 Salida real de `list_indexes()` (verificada ejecutando `ensure_indexes` sobre mongomock):
 
 ```
-users -> _id_, uq_users_email, ix_users_status, ix_users_role_status
+users -> _id_, uq_users_email, ix_users_status, ix_users_role_status, ix_users_neighborhood
 sessions -> _id_, uq_sessions_jti, ix_sessions_user, ttl_sessions_expires
-passwordResets -> _id_, uq_password_resets_hash, ix_password_resets_user,
-                  ttl_password_resets_expires, ix_password_resets_user_created
-mfaChallenges -> _id_, ix_mfa_challenges_user_purpose_status, ttl_mfa_challenges_expires
+password_resets -> _id_, uq_password_resets_hash, ix_password_resets_user,
+                   ttl_password_resets_expires, ix_password_resets_user_created
+mfa_challenges -> _id_, ix_mfa_challenges_user_purpose_status, ttl_mfa_challenges_expires
 audit_logs -> _id_, ix_audit_actor_created, ix_audit_resource
 ```
 
+> Los nombres de los **índices** (`uq_`, `ix_`, `ttl_`, `geo_`) llevan la colección en snake_case desde antes:
+> `uq_password_resets_hash`, `ttl_mfa_challenges_expires`… Es decir, nunca hubo que renombrar índices, sólo
+> colecciones. Eso también hace que el arranque sobre una base vieja **cree** las colecciones nuevas vacías y
+> no toque las antiguas: ver el aviso de migración en §12.4.
+
 ### 7.2 Resto de contextos
 
-**marketplace** (`reservations`, `toolTransactions`)
+**marketplace** (`reservations`, `transactions`)
 
 | Colección | Índice (`nombre`) | Tipo |
 |---|---|---|
@@ -437,21 +498,24 @@ audit_logs -> _id_, ix_audit_actor_created, ix_audit_resource
 | | `requesterId+createdAt(-1)` (`ix_reservations_requester`) | normal |
 | | `ownerId+status+createdAt(-1)` (`ix_reservations_owner`) | normal |
 | | `toolId+requesterId+createdAt` (`uq_reservations_request`) | **único** — protege reintentos del cliente |
-| `toolTransactions` | `buyerId+createdAt(-1)`, `sellerId+createdAt(-1)`, `itemId+status` | normal |
+| `transactions` | `buyerId+createdAt(-1)`, `sellerId+createdAt(-1)`, `itemId+status` | normal |
+
+> `transactions` se llamaba `toolTransactions`. Las reservas siguen en su propia colección: son el ciclo de la
+> solicitud, no el historial de operaciones (`docs/EQUIVALENCIAS_BD.md` fila 11).
 
 **services** (`technicians`): `userId` (`uq_technicians_user`, **único**), `specialties+verificationStatus`,
 `verificationStatus+createdAt` (cola de verificación, CU-18), `verificationStatus+rating(-1)` (ranking, CU-19).
 
-**wellbeing** (`wellbeingConsents`, `wellbeingSurveys`)
+**wellbeing** (`wellbeing_consents`, `wellbeing_surveys`)
 
 | Colección | Índice (`nombre`) | Tipo |
 |---|---|---|
-| `wellbeingConsents` | `userId+purpose` (`uq_consent_active`) | **único parcial** `{granted: true, revokedAt: null}` |
+| `wellbeing_consents` | `userId+purpose` (`uq_consent_active`) | **único parcial** `{granted: true, revokedAt: null}` |
 | | `userId+grantedAt(-1)` (`ix_consent_user_granted`) | normal |
-| `wellbeingSurveys` | `pseudonym+weekKey` (`uq_surveys_pseudonym_week`) | **único** — 1 respuesta por semana (O-08) |
+| `wellbeing_surveys` | `pseudonym+weekKey` (`uq_surveys_pseudonym_week`) | **único** — 1 respuesta por semana (O-08) |
 | | `zone+createdAt(-1)`, `createdAt(-1)` | normal — panel por zona, nunca por usuario |
 
-**fieldwork** (`properties`, `propertyInspections`)
+**fieldwork** (`properties`, `property_inspections`)
 
 | Colección | Índice (`nombre`) | Tipo |
 |---|---|---|
@@ -459,16 +523,16 @@ audit_logs -> _id_, ix_audit_actor_created, ix_audit_resource
 | | `clientId` (`uq_properties_client`) | **único parcial** `{clientId: {$type: "string"}}` |
 | | `location` (`geo_properties_location`) | **2dsphere** |
 | | `createdBy+createdAt(-1)`, `status` | normal |
-| `propertyInspections` | `propertyId+inspectedAt`, `requiresSecondReview+secondReviewBy` | normal |
+| `property_inspections` | `propertyId+inspectedAt`, `requiresSecondReview+secondReviewBy` | normal |
 | | `clientId` (`uq_inspections_client`) | **único parcial** |
 
 **incidents** (`incidents`): `caseId` (`uq_incidents_case`, **único + sparse**), `location`
 (`geo_incidents_location`, **2dsphere**), `status+priority(-1)`, `reportedBy+createdAt(-1)`, `duplicateOf`,
 `clientId` (`uq_incidents_client`, **único parcial**).
 
-**geo** (`mapLayers`): `name` (`uq_map_layers_name`, **único**), `name+version`, `visibleForRoles`.
+**geo** (`map_layers`): `name` (`uq_map_layers_name`, **único**), `name+version`, `visibleForRoles`.
 
-**aid** (`aidNeeds`, `aidInventory`): `caseId` (`uq_aid_needs_case`, **único + sparse**), `location`
+**aid** (`aid_needs`, `aid_inventory`): `caseId` (`uq_aid_needs_case`, **único + sparse**), `location`
 (`geo_aid_needs_location`, **2dsphere**), `requestedBy`, `status+priority(-1)`; y en inventario
 `sourceType+sourceId`, `status+availableQuantity+type`.
 
@@ -494,7 +558,7 @@ audit_logs -> _id_, ix_audit_actor_created, ix_audit_resource
 
 > `service_requests` todavía no tiene código (`docs/EQUIVALENCIAS_BD.md` fila 12, «Pendiente»). Su índice
 > del consecutivo se deja aquí para que no pueda nacer sin la garantía de unicidad. `incidents`,
-> `properties` y `aidNeeds` **no** se repiten en `shared`: cada uno ya define su `uq_*_case` con su nombre
+> `properties` y `aid_needs` **no** se repiten en `shared`: cada uno ya define su `uq_*_case` con su nombre
 > y sus opciones, y Mongo no admite dos índices distintos sobre el mismo campo con el mismo nombre.
 
 ### 7.3 Por qué «parcial», «sparse» y «TTL»
@@ -505,9 +569,10 @@ audit_logs -> _id_, ix_audit_actor_created, ix_audit_resource
   aunque dos envíos offline lleguen exactamente a la vez.
 - **Sparse** en `caseId` permite que `caseId` falte (documentos sin consecutivo) sin romper el índice único.
 - **TTL** con `expireAfterSeconds=0` = «borra cuando `expiresAt` llegue». Es el único mecanismo de limpieza
-  de `sessions`, `passwordResets` y `mfaChallenges`: no hay cron ni tarea programada en la app. Ojo: el TTL de
+  de `sessions`, `password_resets` y `mfa_challenges`: no hay cron ni tarea programada en la app. Ojo: el TTL de
   Mongo corre de forma aproximada (unos 60 s de granularidad), no al milisegundo.
 - **`2dsphere`** habilita `$geoNear` (§8.4) y exige que `location` sea un GeoJSON válido.
+
 
 ---
 
@@ -552,7 +617,7 @@ necesita colección propia (`incidentStatusHistory` sí sería colección aparte
 
 Tres piezas:
 1. El celular genera un `clientId` propio.
-2. Índice **único parcial** en `clientId` (`incidents`, `properties`, `propertyInspections`).
+2. Índice **único parcial** en `clientId` (`incidents`, `properties`, `property_inspections`).
 3. Consulta previa `get_by_client_id()` para responder «ya lo tenía» sin duplicar.
 
 Si dos envíos offline llegan a la vez, el índice rechaza el segundo: el duplicado **no se crea aunque el
@@ -834,16 +899,66 @@ buscando en `src/`.
 `INDEX_INITIALIZERS` (§7.2). `retentionUntil` es índice **normal, no TTL**: el binario se borra con código
 (RN-06), porque vive en S3/MinIO.
 
-### 12.4 Nombres de colección: snake_case en los docs, camelCase en el código
+### 12.4 Nombres de colección: snake_case en los docs y en el código
 
-| En `docs/db/*.md` y doc 09 | En el código (real) |
-|---|---|
-| `password_resets` | `passwordResets` |
-| `aid_needs` | `aidNeeds` |
-| `aid_inventory` | `aidInventory` |
-| `map_layers` | `mapLayers` |
-| `transactions` | `toolTransactions` |
-| `property_inspections` | `propertyInspections` |
+Antes los docs decían `snake_case` y el código usaba camelCase. **Ya coinciden** (`docs/EQUIVALENCIAS_BD.md`
+sección 1). Sólo cambió el **nombre**, no el diseño: las colecciones que ya tenían código y pruebas lo
+conservan.
+
+| Nombre viejo (código) | Nombre hoy | Constante (archivo dueño) |
+|---|---|---|
+| `passwordResets` | `password_resets` | `PASSWORD_RESETS` (`mongo_auth_repository.py`) |
+| `mfaChallenges` | `mfa_challenges` | `COLLECTION` (`mongo_mfa_challenge_repository.py`) |
+| `wellbeingConsents` | `wellbeing_consents` | `CONSENTS` (`mongo_wellbeing_repository.py`) |
+| `wellbeingSurveys` | `wellbeing_surveys` | `SURVEYS` (`mongo_wellbeing_repository.py`) |
+| `aidNeeds` | `aid_needs` | `NEEDS_COLLECTION` (`mongo_aid_repository.py`) |
+| `aidInventory` | `aid_inventory` | `INVENTORY_COLLECTION` (`mongo_aid_repository.py`) |
+| `mapLayers` | `map_layers` | `COLLECTION` (`mongo_map_layer_repository.py`) |
+| `propertyInspections` | `property_inspections` | `COLLECTION` (`mongo_inspection_repository.py`) |
+| `toolTransactions` | `transactions` | `TRANSACTIONS` (`mongo_marketplace_repository.py`) |
+
+Cómo queda garantizado:
+
+- El nombre vive en **una sola constante** del repositorio. Antes estaba escrito a mano también en `indexes.py`
+  y en las pruebas; hoy esos módulos **importan** la constante.
+- `tests/test_collection_names.py` recorre `src/` y **falla** si aparece cualquiera de los nombres viejos entre
+  comillas, y comprueba que cada `indexes.py` crea índices en la colección correcta.
+- `sessions`, `users`, `incidents`, `properties`, `technicians`, `reservations`, `notifications`, `files` y
+  `audit_logs` ya estaban en `snake_case`: no cambiaron.
+
+> ⚠️ **Migración de una base existente**: los repositorios apuntan ahora a las colecciones nuevas. Si hay datos
+> en `aidNeeds`, `mapLayers`, etc., el arranque **no los mueve**: crea colecciones vacías con el nombre nuevo y
+> los índices. Los datos viejos hay que pasarlos a mano una vez (por ejemplo con `mongosh`):
+>
+> ```js
+> for (const [vieja, nueva] of Object.entries({
+>   passwordResets: "password_resets", mfaChallenges: "mfa_challenges",
+>   wellbeingConsents: "wellbeing_consents", wellbeingSurveys: "wellbeing_surveys",
+>   aidNeeds: "aid_needs", aidInventory: "aid_inventory",
+>   mapLayers: "map_layers", propertyInspections: "property_inspections",
+>   toolTransactions: "transactions",
+> })) {
+>   if (db.getCollectionNames().includes(vieja)) {
+>     db[vieja].aggregate([{ $out: nueva }]);   // copia
+>     db[vieja].drop();                        // borra la vieja cuando ya copió
+>   }
+> }
+> ```
+
+### 12.4.1 `users.location`: `neighborhood` salió a la raíz
+
+Ya está en el código (§5.3): `neighborhood` es campo raíz y `location` es GeoJSON Point o `null`. **Lo que no
+hay** es un script de migración: los documentos con `location.neighborhood` se leen bien
+(`_neighborhood_from_document`), pero siguen guardando el barrio dentro de `location` hasta que se actualicen.
+Un barrido de una vez:
+
+```js
+db.users.find({ neighborhood: { $exists: false }, "location.neighborhood": { $exists: true } })
+  .forEach(u => db.users.updateOne(
+    { _id: u._id },
+    { $set: { neighborhood: u.location.neighborhood }, $unset: { "location.neighborhood": "" } },
+  ));
+```
 
 ### 12.5 Dos funciones UTC que hacen lo mismo
 
@@ -862,7 +977,7 @@ Antes la lista estaba copiada en `main.py` y en `tests/conftest.py`. Hoy **sólo
 `tests/conftest.py` la importa. `tests/test_indexes_wiring.py` falla si alguien vuelve a copiarla
 (compara identidad, no contenido) o si un contexto con colecciones no aporta su `ensure_indexes`.
 
-### 12.8 `mfaChallenges` no aparece en `docs/db/_indice.md`
+### 12.8 `mfa_challenges` no aparece en `docs/db/_indice.md`
 
 La colección existe (CU-03) y tiene índices, pero no está listada. Revisa `src/` antes de asumir que un
 archivo de `docs/db/` falta por error.
@@ -926,7 +1041,7 @@ podman exec -it mongo mongosh pereira_responde --eval "db.users.getIndexes().map
 - `files` guarda **sólo metadatos** (`url`, `ownerId`, `accessRoles`, `retentionUntil`); el binario vive en
   S3/MinIO cifrado (RNF-05). Una copia de Mongo **no** respalda las imágenes.
 - `audit_logs` es *append-only*: el código sólo inserta, nunca actualiza ni borra.
-- `wellbeingSurveys` está diseñada para **no** tener id de persona (`pseudonym` + `weekKey`), así que no se
+- `wellbeing_surveys` está diseñada para **no** tener id de persona (`pseudonym` + `weekKey`), así que no se
   puede «borrar las respuestas de un usuario» (RN-03/RN-05, O-07).
 
 ### 13.4 Señales de alarma
@@ -953,11 +1068,14 @@ podman exec -it mongo mongosh pereira_responde --eval "db.users.getIndexes().map
 | `shared/infrastructure/mongo_case_code_generator.py` | Consecutivos `caseId` sobre `counters` (§8.7) |
 | `shared/infrastructure/indexes.py` | `ensure_indexes(db)` de `shared` (`service_requests.caseId`) |
 | `shared/application/case_code_generator.py` | Puerto `CaseCodeGenerator` + `CaseKind` |
-| `<ctx>/infrastructure/mongo_*_repository.py` | Mapeo documento ↔ entidad por contexto |
-| `<ctx>/infrastructure/indexes.py` | `ensure_indexes(db)` por contexto |
+| `<ctx>/infrastructure/mongo_*_repository.py` | Mapeo documento ↔ entidad por contexto **y la constante con el nombre de la colección** (§6) |
+| `<ctx>/infrastructure/indexes.py` | `ensure_indexes(db)` por contexto; importa la constante del repositorio |
 | `identity/domain/role.py` | `Role`, `PRIVILEGE_ORDER`, `normalize_roles()`, `highest_privilege_role()` (§5.2) |
 | `main.py` | `INDEX_INITIALIZERS` (única lista) + `lifespan` + `create_case_code_generator()` |
 | `tests/conftest.py` | Fixtures `db`, `client`, `real_db` |
+| `tests/test_collection_names.py` | Nombres de colección en `snake_case` y definidos una sola vez (§12.4) |
+| `tests/test_indexes_wiring.py` | Una sola `INDEX_INITIALIZERS` y un `ensure_indexes` por contexto (§12.7) |
 | `docs/09_rectificacion_bd_mongodb.md` | Diseño y hallazgos (H-01…H-11) |
+| `docs/EQUIVALENCIAS_BD.md` | Colecciones de PrevenRED2 ↔ código, y qué hacer con cada una |
 | `docs/db/*.md` | Una ficha por colección |
 | `compose.yaml` | Mongo local (nodo simple, sin transacciones) |

@@ -11,6 +11,9 @@ from prevenred.identity.domain.user import User
 from prevenred.identity.domain.value_objects import Email, OneTimeCode, SecondFactorMethod
 from prevenred.identity.infrastructure.indexes import ensure_indexes
 from prevenred.identity.infrastructure.mongo_mfa_challenge_repository import (
+    COLLECTION as MFA_CHALLENGES,
+)
+from prevenred.identity.infrastructure.mongo_mfa_challenge_repository import (
     MongoMfaChallengeRepository,
 )
 from prevenred.identity.infrastructure.mongo_role_audit import MongoRoleAssignmentAudit
@@ -94,7 +97,7 @@ def test_guarda_y_lee_el_desafio(db):
     assert stored.status == "PENDIENTE" and stored.attempts == 0
     assert stored.method.value == "TOTP"
     # El código queda como HASH en la base, nunca en claro.
-    doc = db["mfaChallenges"].find_one({"_id": ObjectId(challenge.id)})
+    doc = db[MFA_CHALLENGES].find_one({"_id": ObjectId(challenge.id)})
     assert doc["codeHash"] == hash_one_time_code(_CODE)
     assert _CODE not in str(doc)
 
@@ -151,13 +154,13 @@ def test_expira_los_desafios_vencidos(db):
     # Se vence el documento directamente (como si hubiera pasado el tiempo): la
     # entidad es inmutable por dentro, pero el adaptador debe cerrarlo igual.
     past = utcnow() - timedelta(seconds=1)
-    db["mfaChallenges"].update_one({"_id": ObjectId(challenge.id)}, {"$set": {"expiresAt": past}})
+    db[MFA_CHALLENGES].update_one({"_id": ObjectId(challenge.id)}, {"$set": {"expiresAt": past}})
 
     challenges.expire_stale(admin.id)
 
     assert challenges.get_pending_by_user(admin.id, "cambio_de_modo") is None
     # El TTL de `expiresAt` borra o el adaptador cierra: en ningún caso sigue pendiente.
-    doc = db["mfaChallenges"].find_one({})
+    doc = db[MFA_CHALLENGES].find_one({})
     assert doc is None or doc["status"] == "EXPIRADO"
 
 
@@ -193,7 +196,7 @@ def test_auditoria_guarda_el_cambio_sin_datos_personales(db):  # E3 / RN-05
 # ---- Índices ----
 def test_indices_de_mfa_y_auditoria(db):
     ensure_indexes(db)      # idempotente: se puede repetir sin error
-    challenge_indexes = {i["name"] for i in db["mfaChallenges"].list_indexes()}
+    challenge_indexes = {i["name"] for i in db[MFA_CHALLENGES].list_indexes()}
     assert "ix_mfa_challenges_user_purpose_status" in challenge_indexes
     assert "ttl_mfa_challenges_expires" in challenge_indexes
     audit_indexes = {i["name"] for i in db["audit_logs"].list_indexes()}
@@ -201,6 +204,10 @@ def test_indices_de_mfa_y_auditoria(db):
     assert "ix_audit_resource" in audit_indexes
     user_indexes = {i["name"] for i in db["users"].list_indexes()}
     assert "ix_users_role_status" in user_indexes
+    # El barrio es campo raíz: el índice apunta a `neighborhood`, no a `location`.
+    assert "ix_users_neighborhood" in user_indexes
+    by_name = {i["name"]: i for i in db["users"].list_indexes()}
+    assert list(by_name["ix_users_neighborhood"]["key"]) == ["neighborhood"]
 
 
 # ---- Puerto técnico del segundo factor ----

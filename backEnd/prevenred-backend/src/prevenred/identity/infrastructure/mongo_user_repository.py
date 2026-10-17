@@ -7,6 +7,8 @@ Convenciones (válidas para TODOS los repositorios):
   - `roles` se guarda como arreglo de códigos de rol (el doc 09 proponía ObjectId; ver
     docs/09_rectificacion_bd_mongodb.md, hallazgo H-01). Se guardan TODOS los roles de la
     cuenta, sin repetir y de MAYOR a menor privilegio: `roles[0]` es el rol efectivo.
+  - `neighborhood` (barrio/comuna) es un campo RAÍZ y `location` es solo un GeoJSON
+    Point o `null` (docs/EQUIVALENCIAS_BD.md §2, RN-05).
 """
 from bson import ObjectId
 from pymongo.database import Database
@@ -36,6 +38,25 @@ def _roles_from_document(d: dict) -> tuple[Role, ...]:
     return tuple(roles) if roles else (Role.CIUDADANO,)
 
 
+def _neighborhood_from_document(d: dict) -> str:
+    """Barrio/comuna desde el campo raíz, tolerando documentos viejos (RN-05).
+
+    Antes se guardaba dentro de `location.neighborhood`; `location` ya es SOLO un
+    GeoJSON Point o `null` (docs/EQUIVALENCIAS_BD.md §2), así que se lee primero el
+    campo raíz y, si no está, la ubicación anterior. Nunca lanza por un documento
+    viejo: como mucho devuelve cadena vacía.
+    """
+    root = d.get("neighborhood")
+    if isinstance(root, str) and root.strip():
+        return root
+    legacy = d.get("location")
+    if isinstance(legacy, dict):
+        old = legacy.get("neighborhood")
+        if isinstance(old, str):
+            return old               # lectura de documentos sin migrar
+    return ""
+
+
 def _to_entity(d: dict) -> User:
     """Documento Mongo -> entidad de dominio (sin emitir UserRegistered)."""
     consent = d.get("consent") or {}
@@ -47,7 +68,7 @@ def _to_entity(d: dict) -> User:
         email=Email(d["email"]),
         password_hash=d.get("passwordHash") or "",
         roles=_roles_from_document(d),       # todos los roles; el efectivo lo calcula User
-        neighborhood=(d.get("location") or {}).get("neighborhood", ""),
+        neighborhood=_neighborhood_from_document(d),
         privacy_notice_version=consent.get("privacyNoticeVersion", ""),
         terms_accepted_at=utc_aware(consent.get("acceptedAt")) or utc_aware(d["createdAt"]),
         is_active=d["status"] == _ACTIVE,
@@ -77,7 +98,8 @@ def _mutable_fields(u: User) -> dict:
         "name": u.full_name,
         "roles": _roles_as_codes(u),
         "status": _ACTIVE if u.is_active else _SUSPENDED,
-        "location.neighborhood": u.neighborhood,
+        # El barrio es campo raíz (no `location.neighborhood`: `location` es GeoJSON).
+        "neighborhood": u.neighborhood,
         "consent.preciseLocationGranted": u.precise_location_granted,
         "security.failedLoginAttempts": u.failed_login_attempts,
         "security.lockedUntil": u.locked_until,
@@ -99,7 +121,12 @@ def _to_document(u: User) -> dict:
         "roles": _roles_as_codes(u),
         "status": _ACTIVE if u.is_active else _SUSPENDED,
         "verified": False,   # la verificación de técnicos es otro caso (CU-18)
-        "location": {"neighborhood": u.neighborhood},
+        # RN-05: `neighborhood` es el campo raíz del barrio/comuna. `location` queda
+        # como GeoJSON Point o `null`: `identity` no captura coordenadas todavía, así
+        # que nace en `null` (un documento viejo puede tener `location.neighborhood`,
+        # que el lector sigue entendiendo; ver `_neighborhood_from_document`).
+        "neighborhood": u.neighborhood,
+        "location": None,
         "consent": {
             "privacyNoticeVersion": u.privacy_notice_version,
             "acceptedAt": u.terms_accepted_at,
