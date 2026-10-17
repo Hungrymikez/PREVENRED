@@ -6,6 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+#: Orden de privilegio de los roles auto-registrables (de menor a mayor). Solo los
+#: tres que acepta el formulario público; el dominio tiene el orden completo en
+#: `prevenred.identity.domain.role.PRIVILEGE_ORDER`.
+ROLE_PREFERENCE = ("CIUDADANO", "VOLUNTARIO", "TECNICO")
+
 
 class RegisterRequest(BaseModel):
     """Cuerpo de POST /auth/register."""
@@ -21,15 +26,12 @@ class RegisterRequest(BaseModel):
 
     @property
     def role(self) -> str:
-        """Rol principal para el dominio (que maneja un rol por cuenta).
+        """Rol efectivo que mostrará la API (el de mayor privilegio de `roles`).
 
-        Manda el orden del formulario (Ciudadano, Técnico, Voluntario): quien se
-        registra como Técnico y Voluntario actúa como Técnico.
+        La API envía la lista completa al dominio; esta propiedad solo sirve para
+        logs o pantallas que necesiten un único rol.
         """
-        for role in ("CIUDADANO", "TECNICO", "VOLUNTARIO"):
-            if role in self.roles:
-                return role
-        return self.roles[0]
+        return max(self.roles, key=lambda code: ROLE_PREFERENCE.index(code))
 
 
 class UserResponse(BaseModel):
@@ -37,7 +39,8 @@ class UserResponse(BaseModel):
     id: str
     full_name: str
     email: str
-    role: str
+    role: str                     # rol efectivo (el de mayor privilegio)
+    roles: list[str] = []         # TODOS los roles, de mayor a menor privilegio
     neighborhood: str
 
 

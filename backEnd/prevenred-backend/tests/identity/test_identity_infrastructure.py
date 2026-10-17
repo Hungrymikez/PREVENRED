@@ -29,7 +29,7 @@ def _admin(email="admin@prevenred.gov.co") -> User:
     """Cuenta administrativa existente (la crea un Administrador, CU-08)."""
     return User.open_administratively(
         full_name="Ana Admin", email=Email(email), password_hash="h",
-        role=Role.ADMINISTRADOR, neighborhood="Centro", privacy_notice_version="v1",
+        roles=(Role.ADMINISTRADOR,), neighborhood="Centro", privacy_notice_version="v1",
         created_by="a" * 24,
     )
 

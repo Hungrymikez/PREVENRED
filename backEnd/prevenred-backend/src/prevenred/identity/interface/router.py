@@ -29,14 +29,16 @@ def register(body: RegisterRequest, use_case: RegisterUser = Depends(get_registe
     user = use_case.execute(
         RegisterUserCommand(
             full_name=body.full_name, email=body.email, password=body.password,
-            role=Role(body.role), neighborhood=body.neighborhood,
+            roles=tuple(Role(code) for code in body.roles),
+            neighborhood=body.neighborhood,
             privacy_notice_version=body.privacy_notice_version,
             accepted_terms=body.accepted_terms,
         )
     )
     return UserResponse(
         id=user.id, full_name=user.full_name, email=user.email.value,
-        role=user.role.value, neighborhood=user.neighborhood,
+        role=user.role.value, roles=[r.value for r in user.roles],
+        neighborhood=user.neighborhood,
     )
 
 
@@ -58,5 +60,6 @@ def me(
         raise NotFoundError("La cuenta ya no existe.")
     return UserResponse(
         id=user.id, full_name=user.full_name, email=user.email.value,
-        role=user.role.value, neighborhood=user.neighborhood,
+        role=user.role.value, roles=[r.value for r in user.roles],
+        neighborhood=user.neighborhood,
     )

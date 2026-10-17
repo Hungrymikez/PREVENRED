@@ -10,7 +10,7 @@ from prevenred.shared.domain.errors import ConflictError
 
 def _user(email="a@mail.com") -> User:
     return User.register(
-        full_name="Ana Gómez", email=Email(email), password_hash="h", role=Role.TECNICO,
+        full_name="Ana Gómez", email=Email(email), password_hash="h", roles=(Role.TECNICO,),
         neighborhood="Dosquebradas", privacy_notice_version="v1", accepted_terms=True,
     )
 

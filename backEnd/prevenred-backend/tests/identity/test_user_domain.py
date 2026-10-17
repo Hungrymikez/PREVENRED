@@ -11,7 +11,8 @@ from prevenred.shared.domain.events import utcnow
 def _new(role=Role.CIUDADANO, accepted=True) -> User:
     return User.register(
         full_name="Camila Pérez", email=Email("Camila@Mail.com"), password_hash="x",
-        role=role, neighborhood="Cuba", privacy_notice_version="v1", accepted_terms=accepted,
+        roles=(role,), neighborhood="Cuba", privacy_notice_version="v1",
+        accepted_terms=accepted,
     )
 
 
@@ -56,7 +57,7 @@ def test_los_codigos_de_rol_van_en_mayuscula():
 def test_cuenta_interna_se_crea_por_encargo_de_un_administrador(role):
     user = User.open_administratively(
         full_name="Iván Inspector", email=Email("Ivan@PrevenRed.gov.co"),
-        password_hash="hash", role=role, neighborhood="Cuba",
+        password_hash="hash", roles=(role,), neighborhood="Cuba",
         privacy_notice_version="v1", created_by="a" * 24,
     )
     assert user.role is role and user.is_active
@@ -71,7 +72,7 @@ def test_desde_administracion_no_se_crean_cuentas_de_la_comunidad():
     with pytest.raises(ValidationError):
         User.open_administratively(
             full_name="Ciudadano", email=Email("c@mail.com"), password_hash="h",
-            role=Role.CIUDADANO, neighborhood="Cuba",
+            roles=(Role.CIUDADANO,), neighborhood="Cuba",
             privacy_notice_version="v1", created_by="a" * 24,
         )
 

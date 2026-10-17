@@ -95,7 +95,7 @@ class FakeHasher:
 def _account(directory, role=Role.CIUDADANO, email="x@mail.com", active=True, **extra):  # noqa: ANN001, ANN201
     """Cuenta YA existente: se rehidrata (register rechaza los roles internos)."""
     user = User.rehydrate(
-        full_name="Persona Prueba", email=Email(email), password_hash="h", role=role,
+        full_name="Persona Prueba", email=Email(email), password_hash="h", roles=(role,),
         neighborhood="Centro", privacy_notice_version="v1", terms_accepted_at=utcnow(),
         is_active=active, **extra,
     )
