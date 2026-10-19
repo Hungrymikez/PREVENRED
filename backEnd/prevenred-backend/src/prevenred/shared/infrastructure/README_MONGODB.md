@@ -398,7 +398,8 @@ va en **`snake_case`** (`docs/EQUIVALENCIAS_BD.md`), igual que en `docs/db/*.md`
 ⚠️ **Excepciones al patrón:**
 - `MongoSurveyRepository` **no** hereda de `BaseMongoRepository` a propósito: una respuesta de bienestar
   no se edita ni se consulta por id, y exponer `update()` invitaría a «corregir» datos anónimos. Sólo
-  implementa `add`, `last_response_at` y `count_between`.
+  implementa `add` y `count_between`: **no hay forma de preguntar por una persona** (ni `last_response_at`,
+  ni equivalente). El documento guarda `answers`, `zone`, `triggerEventId` y `createdAt`, nada más.
 - `MongoRoleAssignmentAudit` tampoco: no mapea una entidad, sólo inserta. Y escribe en `audit_logs`, que
   **pertenece al contexto `audit`**, no a `identity`: dependencia cruzada deliberada y documentada.
 
@@ -512,8 +513,14 @@ audit_logs -> _id_, ix_audit_actor_created, ix_audit_resource
 |---|---|---|
 | `wellbeing_consents` | `userId+purpose` (`uq_consent_active`) | **único parcial** `{granted: true, revokedAt: null}` |
 | | `userId+grantedAt(-1)` (`ix_consent_user_granted`) | normal |
-| `wellbeing_surveys` | `pseudonym+weekKey` (`uq_surveys_pseudonym_week`) | **único** — 1 respuesta por semana (O-08) |
-| | `zone+createdAt(-1)`, `createdAt(-1)` | normal — panel por zona, nunca por usuario |
+| | `userId+lastSurveyWeekKey` (`ix_consent_user_survey_week`) | normal — límite de 1 encuesta por semana (O-08) |
+| `wellbeing_surveys` | `zone+createdAt(-1)`, `createdAt(-1)` | normal — panel por zona, nunca por usuario |
+
+> El límite de **una encuesta por semana** ya no se apoya en la encuesta (que es anónima) sino en el
+> consentimiento: `wellbeing_consents.lastSurveyWeekKey` guarda la semana ISO (`2026-W41`) y **nunca la
+> hora**. Se escribe con `$max`, así que es idempotente y no retrocede. El índice único
+> `uq_surveys_pseudonym_week` se eliminó junto con el campo `pseudonym`: un índice único por persona en la
+> encuesta volvería a vincularla con alguien.
 
 **fieldwork** (`properties`, `property_inspections`)
 
@@ -987,6 +994,44 @@ archivo de `docs/db/` falta por error.
 `docs/09_rectificacion_bd_mongodb.md` (H-01) dice «El dominio tiene 4 roles fijos». Hoy `Role` tiene **6**
 códigos. La fuente buena es `identity/domain/role.py`.
 
+### 12.10 Encuesta de bienestar: sin `pseudonym`, y el límite semanal en el consentimiento
+
+Antes `wellbeing_surveys` guardaba `pseudonym` (hash con sal) + `weekKey` y un índice único
+`uq_surveys_pseudonym_week`, para limitar a una respuesta por semana. Ese hash **seguía siendo un dato
+por persona** en la colección anónima. Ahora:
+
+| Antes | Ahora |
+|---|---|
+| Documento con `pseudonym` + `weekKey` | Documento **sin ningún dato de la persona**: `answers`, `zone`, `triggerEventId`, `createdAt` |
+| Índice único `uq_surveys_pseudonym_week` | **Eliminado** |
+| `SurveyRepository.last_response_at(pseudonym)` | **Eliminado**: el puerto sólo tiene `add` y `count_between` |
+| Límite semanal = mirar la encuesta | `ConsentRepository.record_survey_sent(user_id, purpose, week_key)` → `wellbeing_consents.lastSurveyWeekKey` |
+| `already_sent_this_week(fecha)` | `SurveyResponse.was_sent_in(week_key)` y `Consent.record_survey_sent()` |
+
+Por qué en el consentimiento y no en la encuesta: el consentimiento **ya es** por persona (CU-24), así que
+es el único sitio legítimo donde vive «esta persona ya respondió». Guarda `2026-W41` —sólo la semana,
+**nunca la hora**— y se escribe con `$max`, de modo que es idempotente y una semana anterior no lo
+retrocede. La encuesta queda sin punto de unión: ni siquiera tiene un índice por el que preguntar por
+alguien.
+
+Cuidado con `$max` y los documentos nuevos: `to_document` **omite** `lastSurveyWeekKey` cuando es `None`.
+Un `null` explícito hace fallar la comparación (`TypeError: '>' not supported between 'str' and
+'NoneType'`), porque `$max` no ordena texto contra `null`.
+
+> ⚠️ **Bases existentes**: el arranque crea `lastSurveyWeekKey` y el índice nuevo, pero **no** borra el
+> índice viejo de `wellbeing_surveys` ni limpia los documentos que ya tienen `pseudonym`/`weekKey`. En una
+> base con datos, hazlo una vez:
+>
+> ```js
+> // 1) retirar el índice que vinculaba la encuesta con una persona
+> db.wellbeing_surveys.dropIndex("uq_surveys_pseudonym_week");
+> // 2) borrar los campos de identidad de los documentos que ya existen
+> db.wellbeing_surveys.updateMany({}, { $unset: { pseudonym: "", weekKey: "" } });
+> ```
+>
+> El punto 2 es irreversible: no hay forma de deshacerlo, porque nunca hubo manera de saber a quién
+> pertenecía cada documento. Eso es justo lo que se busca.
+
 ---
 
 ## 13. Operación: inspección y mantenimiento
@@ -1041,8 +1086,10 @@ podman exec -it mongo mongosh pereira_responde --eval "db.users.getIndexes().map
 - `files` guarda **sólo metadatos** (`url`, `ownerId`, `accessRoles`, `retentionUntil`); el binario vive en
   S3/MinIO cifrado (RNF-05). Una copia de Mongo **no** respalda las imágenes.
 - `audit_logs` es *append-only*: el código sólo inserta, nunca actualiza ni borra.
-- `wellbeing_surveys` está diseñada para **no** tener id de persona (`pseudonym` + `weekKey`), así que no se
-  puede «borrar las respuestas de un usuario» (RN-03/RN-05, O-07).
+- `wellbeing_surveys` no tiene id de persona (`answers`, `zone`, `triggerEventId`, `createdAt`), así que no se
+  puede «borrar las respuestas de un usuario» (RN-03/RN-05, O-07). El consentimiento de
+  `wellbeing_consents` sí es por persona y, además del aviso, guarda la semana del último envío
+  (`lastSurveyWeekKey`) para el límite semanal: borrar la cuenta borra esa fila, no las respuestas.
 
 ### 13.4 Señales de alarma
 

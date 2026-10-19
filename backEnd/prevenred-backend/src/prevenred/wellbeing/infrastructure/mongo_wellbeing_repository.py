@@ -1,9 +1,16 @@
 """
 Repositorios de bienestar: `wellbeing_consents` y `wellbeing_surveys` (CU-23/24).
 
-`MongoSurveyRepository.add` escribe un documento CERRADO: no hay mapeo genérico
-de la entidad que pudiera arrastrar un `userId` si mañana alguien lo añade. Si
-no aparece en ese diccionario, no se guarda.
+`MongoSurveyRepository.add` escribe un documento CERRADO y mínimo: respuestas,
+zona, `triggerEventId` y fecha. No hay mapeo genérico de la entidad que pudiera
+arrastrar un `userId` si mañana alguien lo añade, y el documento **no** lleva
+`userId` ni `respondentId` ni ningún hash de la cuenta (`tests/wellbeing/test_wellbeing.py`
+vigila que no vuelva). Si no aparece en ese diccionario, no se guarda.
+
+El límite de una respuesta por semana no se apoya en la encuesta, que es anónima,
+sino en el consentimiento de la persona: `MongoConsentRepository.record_survey_sent`
+escribe `lastSurveyWeekKey` (`2026-W41`) con `$max`, así que **sólo se conserva la
+semana, nunca la hora**, y la operación es idempotente.
 """
 from datetime import datetime
 
@@ -33,6 +40,7 @@ def _consent_to_entity(d: dict) -> Consent:
         granted=bool(d.get("granted", True)),
         granted_at=utc_aware(d["grantedAt"]),
         revoked_at=utc_aware(d.get("revokedAt")),
+        last_survey_week_key=d.get("lastSurveyWeekKey"),
     )
 
 
@@ -47,7 +55,7 @@ class MongoConsentRepository(BaseMongoRepository[Consent], ConsentRepository):
 
     def to_document(self, c: Consent) -> dict:
         """Consentimiento -> documento completo."""
-        return {
+        doc = {
             "_id": ObjectId(c.id),
             "userId": to_reference(c.user_id),
             "purpose": c.purpose,
@@ -56,6 +64,11 @@ class MongoConsentRepository(BaseMongoRepository[Consent], ConsentRepository):
             "grantedAt": c.granted_at,
             "revokedAt": c.revoked_at,
         }
+        if c.last_survey_week_key is not None:
+            # Se omite cuando no hay envío: `$max` no puede comparar texto con un
+            # `null` explícito, y un campo ausente sí es menor que cualquier semana.
+            doc["lastSurveyWeekKey"] = c.last_survey_week_key
+        return doc
 
     def to_entity(self, document: dict) -> Consent:
         """Documento -> consentimiento."""
@@ -83,6 +96,21 @@ class MongoConsentRepository(BaseMongoRepository[Consent], ConsentRepository):
         )
         return _consent_to_entity(doc) if doc else None
 
+    def record_survey_sent(self, user_id: str, purpose: str, week_key: str) -> None:
+        """Anota la semana del envío en el consentimiento vigente (O-08).
+
+        Escribe `lastSurveyWeekKey` con `$max`: sólo la semana entra al documento,
+        nunca la hora, y repetir el mismo envío no cambia nada. `$max` también deja
+        el campo en la semana más reciente si la aplicación se reintenta fuera de
+        orden (`2026-W41` < `2026-W42` en texto porque el formato es fijo).
+        """
+        oid = to_object_id(user_id)
+        if oid is None:
+            return
+        self._consents.update_one(
+            {"userId": oid, "purpose": purpose, "granted": True, "revokedAt": None},
+            {"$max": {"lastSurveyWeekKey": week_key}},
+        )
 
 
 class MongoSurveyRepository(SurveyRepository):
@@ -96,24 +124,15 @@ class MongoSurveyRepository(SurveyRepository):
         self._surveys = db[SURVEYS]
 
     def add(self, response: SurveyResponse) -> None:
-        """Inserta la respuesta; el documento NO tiene ningún id de persona."""
+        """Inserta la respuesta; el documento NO tiene ningún dato de la persona."""
         self._surveys.insert_one(
             {
                 "answers": dict(response.answers),
-                "pseudonym": response.pseudonym,
-                "weekKey": response.week_key,
                 "zone": response.zone,
                 "triggerEventId": to_reference(response.trigger_event_id),
                 "createdAt": response.created_at,
             }
         )
-
-    def last_response_at(self, pseudonym: str) -> datetime | None:
-        """Momento del último envío del mismo pseudónimo (límite semanal)."""
-        doc = self._surveys.find_one(
-            {"pseudonym": pseudonym}, {"createdAt": 1}, sort=[("createdAt", -1)]
-        )
-        return utc_aware(doc["createdAt"]) if doc else None
 
     def count_between(self, start: datetime, end: datetime) -> int:
         """Conteo agregado del periodo (sin identificar a nadie)."""
