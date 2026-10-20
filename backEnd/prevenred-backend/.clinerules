@@ -1,0 +1,43 @@
+# Reglas del proyecto PrevenRed (backend FastAPI + DDD + MongoDB)
+Responde y comenta SIEMPRE en español. Sé breve: no expliques lo que no pedí.
+
+## Arquitectura (obligatoria)
+- Ruta: src/prevenred/<contexto>/{domain,application,infrastructure,interface}/
+- domain: reglas de negocio puras. PROHIBIDO importar fastapi, pymongo, bson, pydantic o jwt.
+- application: casos de uso (una clase con método execute). Usa domain y puertos (ABC). PROHIBIDO importar fastapi o pymongo.
+- infrastructure: implementa los puertos (repositorios PyMongo, JWT, almacenamiento, etc.) y los índices del contexto.
+- interface: routers, schemas y dependencies (cableado). Los routers NO llevan lógica de negocio.
+- Un contexto NO importa el interior de otro ni consulta sus colecciones. Solo usa su cara pública: domain/events.py y application/ports.py. tests/test_architecture.py lo verifica.
+- Errores: lanzar los de shared/domain/errors.py. Nunca HTTPException fuera de interface.
+
+## MongoDB
+- PyMongo síncrono, SIN ODM. El repositorio traduce documento <-> entidad (ver identity/infrastructure/mongo_user_repository.py).
+- Colecciones y campos: SOLO los de docs/db/<coleccion>.md (camelCase en BD, snake_case en Python). Lee únicamente las fichas de las colecciones del caso.
+- El id en el dominio es str (ObjectId en hex); se convierte con ObjectId(id) solo en infrastructure.
+- Actualizar con $set de los campos del contexto; nunca reemplazar el documento entero.
+- Cada contexto con colecciones tiene infrastructure/indexes.py (ensure_indexes) registrado en main.py.
+- Escribir 1 documento es atómico. Para operaciones de varios documentos usa filtros condicionales (ver docs/09_rectificacion_bd_mongodb.md §5).
+
+## No dañar lo que ya funciona
+- No modifiques shared/, identity/ ni tests/conftest.py salvo que el prompt lo pida explícitamente.
+- No bajes la calidad para que pasen los tests: si un test falla, arregla el código, no el test.
+
+## Patrón a copiar
+Antes de crear algo nuevo, mira cómo está hecho en src/prevenred/identity/ y replícalo
+(mismos nombres, estructura y estilo). No inventes otra forma de hacerlo.
+
+## Comentarios
+- Docstring en español al inicio de cada archivo (qué es y por qué existe) y en cada clase/función pública.
+- Marca con "# CU-xx paso n / A1 / E2" donde se implemente algo de la ficha.
+- Explica el POR QUÉ, no lo obvio.
+
+## Alcance de cada tarea
+- Lee SOLO docs/cu/CU-xx.md del caso pedido (y docs/reglas_transversales.md si hace falta). No leas todo el repo.
+- Toca únicamente los archivos que indique el prompt.
+- No inventes reglas: si la ficha dice "pendiente (O-xx)", usa una constante provisional con TODO(O-xx).
+
+## Calidad
+- Type hints en todo. Python 3.12.
+- Cada caso de uso trae pruebas en tests/<contexto>/ (mongomock, ver tests/conftest.py). Corre `pytest -q tests/<contexto>` hasta que pasen.
+- No instales dependencias nuevas sin que lo pida.
+- Si algo falla 2 veces seguidas, detente y dime el error resumido. No entres en bucles.

@@ -35,13 +35,16 @@ class AuthResult:
 
     Una cuenta administrativa recibe `access_token=None` y `mfa_required=True`:
     la contraseña fue correcta, pero NO hay sesión hasta validar el segundo factor
-    (CU-03). Así el cliente sabe que debe pedir el código, sin recibir un token a
-    medias que pudiera usarse sin MFA.
+    (CU-03). `user_id` y `roles` viajan aquí para que la interfaz pueda emitir el
+    token TEMPORAL del segundo factor, que no abre sesión (ver `TokenService`).
     """
     access_token: str | None
     role: Role
     mfa_required: bool = False
+    user_id: str = ""
+    roles: tuple[Role, ...] = ()
     # TODO(CU-04): incluir el modo operacional vigente (Cotidiano/Emergencia).
+
 
 
 class LoginUser:
@@ -93,8 +96,14 @@ class LoginUser:
                 self._request_mfa.execute(
                     RequestMfaCommand(user_id=user.id, purpose=LOGIN_PURPOSE)
                 )
-            return AuthResult(access_token=None, role=user.role, mfa_required=True)
+            return AuthResult(
+                access_token=None, role=user.role, mfa_required=True,
+                user_id=user.id, roles=tuple(user.roles),
+            )
 
         user.register_successful_login()
         self._users.update(user)
-        return AuthResult(access_token=self._tokens.issue(user.id, user.roles), role=user.role)
+        return AuthResult(
+            access_token=self._tokens.issue(user.id, user.roles), role=user.role,
+            user_id=user.id, roles=tuple(user.roles),
+        )
