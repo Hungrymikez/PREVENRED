@@ -1,0 +1,13 @@
+# MongoDB local para desarrollo con Podman:   podman compose up -d
+# (también funciona con Docker). Guía completa: ../docs/GUIA_PODMAN.md
+# Es un nodo simple (sin replica set): las transacciones multi-documento no están disponibles
+# en local; el diseño evita depender de ellas (../docs/09_rectificacion_bd_mongodb.md §5).
+services:
+  mongo:
+    image: docker.io/library/mongo:7        # nombre completo: Podman no asume el registro
+    container_name: mongo
+    command: ["--wiredTigerCacheSizeGB", "0.25"]   # limita la memoria de caché (equipo liviano)
+    ports: ["27017:27017"]
+    volumes: ["mongo_data:/data/db"]
+volumes:
+  mongo_data:
