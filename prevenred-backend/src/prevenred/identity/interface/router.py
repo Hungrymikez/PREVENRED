@@ -1,4 +1,5 @@
 """Rutas HTTP del contexto identity. Solo traducen HTTP <-> casos de uso."""
+
 from fastapi import APIRouter, Depends
 
 from prevenred.identity.application.login_user import LoginCommand, LoginUser
@@ -28,15 +29,21 @@ def register(body: RegisterRequest, use_case: RegisterUser = Depends(get_registe
     """CU-01: crea una cuenta y devuelve sus datos públicos (nunca la contraseña)."""
     user = use_case.execute(
         RegisterUserCommand(
-            full_name=body.full_name, email=body.email, password=body.password,
-            role=Role(body.role), neighborhood=body.neighborhood,
+            full_name=body.full_name,
+            email=body.email,
+            password=body.password,
+            role=Role(body.role),
+            neighborhood=body.neighborhood,
             privacy_notice_version=body.privacy_notice_version,
             accepted_terms=body.accepted_terms,
         )
     )
     return UserResponse(
-        id=user.id, full_name=user.full_name, email=user.email.value,
-        role=user.role.value, neighborhood=user.neighborhood,
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email.value,
+        role=user.role.value,
+        neighborhood=user.neighborhood,
     )
 
 
@@ -57,6 +64,9 @@ def me(
     if user is None:
         raise NotFoundError("La cuenta ya no existe.")
     return UserResponse(
-        id=user.id, full_name=user.full_name, email=user.email.value,
-        role=user.role.value, neighborhood=user.neighborhood,
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email.value,
+        role=user.role.value,
+        neighborhood=user.neighborhood,
     )

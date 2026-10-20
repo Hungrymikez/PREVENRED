@@ -3,6 +3,7 @@ CU-02 · Iniciar sesión.
 Seguridad: ante credenciales malas siempre el mismo mensaje genérico (E1) para
 no revelar si el correo existe.
 """
+
 from dataclasses import dataclass
 
 from prevenred.identity.application.ports import PasswordHasher, TokenService
@@ -23,6 +24,7 @@ _GENERIC = "Correo o contraseña incorrectos."
 @dataclass(frozen=True)
 class LoginCommand:
     """Datos de entrada del caso de uso CU-02."""
+
     email: str
     password: str
 
@@ -30,6 +32,7 @@ class LoginCommand:
 @dataclass(frozen=True)
 class AuthResult:
     """Resultado de un inicio de sesión exitoso: el token y el rol del usuario."""
+
     access_token: str
     role: Role
     # TODO(CU-04): incluir el modo operacional vigente (Cotidiano/Emergencia).
@@ -37,6 +40,7 @@ class AuthResult:
 
 class LoginUser:
     """Caso de uso CU-02: valida credenciales, aplica el bloqueo por intentos y emite el token."""
+
     def __init__(
         self,
         users: UserRepository,
@@ -61,14 +65,14 @@ class LoginUser:
             raise UnauthorizedError(_GENERIC)
 
         now = utcnow()
-        if user.is_locked(now):                              # E2
+        if user.is_locked(now):  # E2
             raise TooManyAttemptsError("Demasiados intentos. Intenta de nuevo más tarde.")
-        if not user.is_active:                               # E3
+        if not user.is_active:  # E3
             raise ForbiddenError("Tu cuenta está desactivada. Comunícate con la entidad.")
 
         if not self._hasher.verify(cmd.password, user.password_hash):
             user.register_failed_login(now)
-            self._users.update(user)    # se guarda el fallo ANTES de lanzar el error
+            self._users.update(user)  # se guarda el fallo ANTES de lanzar el error
             raise UnauthorizedError(_GENERIC)
 
         # A1 / RN-07: cuentas administrativas exigen MFA (CU-03). Mientras CU-03 no

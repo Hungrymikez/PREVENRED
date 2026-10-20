@@ -2,6 +2,7 @@
 Puerto (interfaz) del repositorio. El dominio dice QUÉ necesita guardar/leer;
 la capa infrastructure decide CÓMO (PyMongo, memoria para tests, etc.).
 """
+
 from abc import ABC, abstractmethod
 
 from prevenred.identity.domain.user import User

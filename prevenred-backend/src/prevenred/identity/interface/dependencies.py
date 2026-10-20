@@ -3,6 +3,7 @@ Cableado (inyección de dependencias): aquí se "arman" los casos de uso con
 sus implementaciones concretas. Es el único lugar que conoce ambos lados.
 También contiene la autorización por rol (RBAC, RF-03).
 """
+
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pymongo.database import Database
@@ -12,6 +13,7 @@ from prevenred.identity.application.ports import PasswordHasher, TokenPayload, T
 from prevenred.identity.application.register_user import RegisterUser
 from prevenred.identity.domain.repositories import UserRepository
 from prevenred.identity.domain.role import Role
+from prevenred.identity.domain.user import User
 from prevenred.identity.infrastructure.argon2_password_hasher import Argon2PasswordHasher
 from prevenred.identity.infrastructure.jwt_token_service import JwtTokenService
 from prevenred.identity.infrastructure.mongo_user_repository import MongoUserRepository
@@ -76,9 +78,22 @@ def require_roles(*allowed: Role):
     """Fábrica de dependencias RBAC. Uso en otros contextos:
         @router.get("/x", dependencies=[Depends(require_roles(Role.ADMINISTRADOR))])
     TODO(CU-04): además del rol, validar el modo operacional vigente (RF-03)."""
+
     def checker(token: TokenPayload = Depends(get_current_token)) -> TokenPayload:
         """Deja pasar solo si el rol del token está entre los permitidos; si no, responde 403."""
         if token.role not in allowed:
             raise ForbiddenError("No tienes permiso para esta función.")
         return token
+
     return checker
+
+
+def get_current_user(
+    token: TokenPayload = Depends(get_current_token),
+    users: UserRepository = Depends(get_user_repository),
+) -> User:
+    """Exige token de sesión y entrega la entidad User completa."""
+    user = users.get_by_id(token.user_id)
+    if user is None:
+        raise UnauthorizedError("Usuario no encontrado o sesión inválida.")
+    return user

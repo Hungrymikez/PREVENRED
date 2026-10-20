@@ -1,4 +1,5 @@
 """Puertos de servicios técnicos que necesitan los casos de uso."""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -23,6 +24,7 @@ class PasswordHasher(ABC):
 @dataclass(frozen=True)
 class TokenPayload:
     """Datos que viajan dentro del token de sesión: quién es el usuario y qué rol tiene."""
+
     user_id: str
     role: Role
 

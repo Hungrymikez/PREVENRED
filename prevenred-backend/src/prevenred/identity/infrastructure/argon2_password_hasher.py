@@ -1,4 +1,5 @@
 """Hash de contraseñas con Argon2 (algoritmo recomendado actualmente)."""
+
 from argon2 import PasswordHasher as _Argon2
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 
@@ -7,6 +8,7 @@ from prevenred.identity.application.ports import PasswordHasher
 
 class Argon2PasswordHasher(PasswordHasher):
     """Implementación de PasswordHasher con Argon2."""
+
     def __init__(self) -> None:
         self._ph = _Argon2()
 

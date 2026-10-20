@@ -1,4 +1,5 @@
 """Fixtures compartidas: una API con MongoDB en memoria (mongomock) por cada test."""
+
 import os
 from uuid import uuid4
 
@@ -7,15 +8,37 @@ import pytest
 from fastapi.testclient import TestClient
 from pymongo import MongoClient
 
+from prevenred.fieldwork.infrastructure.indexes import ensure_indexes as fieldwork_indexes
+from prevenred.identity.domain.role import Role
+from prevenred.identity.domain.user import User
+from prevenred.identity.domain.value_objects import Email
 from prevenred.identity.infrastructure.indexes import ensure_indexes as identity_indexes
+from prevenred.identity.interface.dependencies import get_current_user
+from prevenred.incidents.infrastructure.indexes import ensure_indexes as incidents_indexes
 from prevenred.main import create_app
-from prevenred.shared.infrastructure.mongo import get_db
+from prevenred.operating_mode.infrastructure.indexes import (
+    ensure_indexes as operating_mode_indexes,
+)
+from prevenred.shared.domain.events import utcnow
+from prevenred.shared.infrastructure.mongo import get_database, get_db
+from tests.async_mongo import AsyncDatabase
+
+
+def _safe_indexes(ensure, database) -> None:
+    """mongomock no soporta bien 2dsphere; no fallar el fixture por eso."""
+    try:
+        ensure(database)
+    except Exception:
+        pass
 
 
 @pytest.fixture
 def db():
     database = mongomock.MongoClient()["pereira_responde_test"]
-    identity_indexes(database)   # los índices únicos también se prueban
+    identity_indexes(database)
+    operating_mode_indexes(database)
+    _safe_indexes(incidents_indexes, database)
+    _safe_indexes(fieldwork_indexes, database)
     return database
 
 
@@ -24,6 +47,50 @@ def client(db):
     app = create_app()
     app.dependency_overrides[get_db] = lambda: db
     return TestClient(app)  # sin 'with': no ejecuta lifespan (no toca la BD real)
+
+
+@pytest.fixture
+def motor_db():
+    """Base asíncrona (estilo Motor) en memoria para los contextos que usan Motor."""
+    return AsyncDatabase(mongomock.MongoClient(tz_aware=True)["prevenred_async_test"])
+
+
+@pytest.fixture
+def api(db, motor_db):
+    """API completa con ambas bases en memoria. Usa `act_as(user)` para fijar la sesión."""
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_database] = lambda: motor_db
+    return TestClient(app)
+
+
+@pytest.fixture
+def make_user():
+    """Crea una entidad User (sin hashing costoso) con el rol pedido."""
+
+    def _make(role: Role = Role.CIUDADANO, name: str = "Usuario de Prueba") -> User:
+        return User(
+            full_name=name,
+            email=Email(f"{uuid4().hex[:10]}@pereira.gov.co"),
+            password_hash="hash-no-usable",
+            role=role,
+            neighborhood="Cuba",
+            privacy_notice_version="v1",
+            terms_accepted_at=utcnow(),
+        )
+
+    return _make
+
+
+@pytest.fixture
+def act_as(api):
+    """Suplanta la sesión (get_current_user) del cliente `api` con el usuario dado."""
+
+    def _act_as(user: User) -> User:
+        api.app.dependency_overrides[get_current_user] = lambda: user
+        return user
+
+    return _act_as
 
 
 @pytest.fixture

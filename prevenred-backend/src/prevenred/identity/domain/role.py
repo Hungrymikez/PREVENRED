@@ -1,13 +1,20 @@
 """Roles de PrevenRed (doc 02/03). El Coordinador se agrupa en Administrador."""
+
 from enum import StrEnum
 
 
 class Role(StrEnum):
     """Rol de una cuenta. Define qué puede hacer el usuario (control de acceso por rol, RF-03)."""
+
     CIUDADANO = "ciudadano"
     TECNICO_VOLUNTARIO = "tecnico_voluntario"
     INSPECTOR = "inspector"
     ADMINISTRADOR = "administrador"
+
+    # Aliases de compatibilidad
+    ADMIN = "administrador"
+    TECNICO = "tecnico_voluntario"
+    VOLUNTARIO = "tecnico_voluntario"
 
     @property
     def is_self_registrable(self) -> bool:

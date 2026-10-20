@@ -2,6 +2,7 @@
 Value Objects: valores sin identidad que se validan al crearse.
 Si existe un `Email`, ya se sabe que es válido (no hay que revalidar).
 """
+
 import re
 from dataclasses import dataclass
 
@@ -13,6 +14,7 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 @dataclass(frozen=True)
 class Email:
     """Correo electrónico válido y normalizado en minúsculas."""
+
     value: str
 
     def __post_init__(self) -> None:
