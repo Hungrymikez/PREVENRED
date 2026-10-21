@@ -39,3 +39,6 @@ uploads/
 Thumbs.db
 .clinerules
 .clineignore
+# --- Configuración local del asistente de IA Cline ---
+.clinerules
+.clineignore
