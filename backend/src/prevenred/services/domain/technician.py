@@ -1,69 +1,101 @@
-"""Perfil profesional del técnico (CU-17). Las reglas viven aquí, no en Mongo."""
+import re
+import urllib.parse
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
 
 from prevenred.shared.domain.entity import Entity
-from prevenred.shared.domain.errors import ValidationError
+from prevenred.shared.domain.errors import DomainValidationError
+from prevenred.shared.domain.ids import EntityId
 
 
-@dataclass(kw_only=True, eq=False)
-class Technician(Entity):
-    """Perfil de un técnico vinculado a una cuenta."""
-    user_id: str
-    specialties: list[str]
+class Specialty(StrEnum):
+    PLOMERIA = "PLOMERIA"
+    ELECTRICIDAD = "ELECTRICIDAD"
+    CONSTRUCCION = "CONSTRUCCION"
+    CARPINTERIA = "CARPINTERIA"
+    PINTURA = "PINTURA"
+    CERRAJERIA = "CERRAJERIA"
+    OTRO = "OTRO"
+
+
+class VerificationStatus(StrEnum):
+    PENDING = "PENDIENTE"
+    VERIFIED = "VERIFICADO"
+    REJECTED = "RECHAZADO"
+
+
+@dataclass
+class TechnicianProfile(Entity):
+    user_id: EntityId
+    full_name: str
+    phone_number: str
+    specialties: list[Specialty]
     experience_years: int
-    availability: str
-    verification_status: str = "PENDIENTE"
+    bio: str
+    verification_status: VerificationStatus
+    rating_average: float
+    reviews_count: int
+    longitude: float
+    latitude: float
+    created_at: datetime
+    verified_by: EntityId | None = None
 
     @classmethod
-    def register(
+    def create(
         cls,
-        *,
-        user_id: str,
-        specialties: list[str],
+        user_id: EntityId,
+        full_name: str,
+        phone_number: str,
+        specialties: list[Specialty],
         experience_years: int,
-        availability: str,
-    ) -> "Technician":
-        """Crea el perfil en estado Pendiente (CU-17)."""
-        technician = cls(
+        bio: str,
+        longitude: float,
+        latitude: float,
+    ) -> "TechnicianProfile":
+        if not full_name or len(full_name.strip()) < 3:
+            raise DomainValidationError("El nombre completo debe tener al menos 3 caracteres.")
+        clean_phone = re.sub(r"[^\d+]", "", phone_number)
+        if len(clean_phone) < 7:
+            raise DomainValidationError("Número de teléfono de contacto inválido.")
+        if not specialties:
+            raise DomainValidationError("Debe especificar al menos una especialidad técnica.")
+        if experience_years < 0:
+            raise DomainValidationError("Los años de experiencia no pueden ser negativos.")
+        if not (-180.0 <= longitude <= 180.0 and -90.0 <= latitude <= 90.0):
+            raise DomainValidationError("Coordenadas geográficas inválidas.")
+
+        return cls(
+            id=EntityId.generate(),
             user_id=user_id,
-            specialties=[item.strip() for item in specialties if item.strip()],
+            full_name=full_name.strip(),
+            phone_number=clean_phone,
+            specialties=specialties,
             experience_years=experience_years,
-            availability=availability.strip(),
+            bio=bio.strip() if bio else "",
+            verification_status=VerificationStatus.PENDING,
+            rating_average=0.0,
+            reviews_count=0,
+            longitude=longitude,
+            latitude=latitude,
+            created_at=datetime.now(UTC),
+            verified_by=None,
         )
-        technician._validate()
-        return technician
 
-    def update_profile(
-        self,
-        *,
-        specialties: list[str],
-        experience_years: int,
-        availability: str,
-    ) -> None:
-        """Actualiza el perfil ya cargado.
+    def verify(self, admin_id: EntityId) -> None:
+        self.verification_status = VerificationStatus.VERIFIED
+        self.verified_by = admin_id
 
-        Cambiar especialidad o experiencia reinicia la verificación (CU-17).
-        Cambiar solo la disponibilidad no (A1).
-        """
-        cleaned = [item.strip() for item in specialties if item.strip()]
-        _check_profile(cleaned, experience_years)
-        verification_changed = (
-            cleaned != self.specialties or experience_years != self.experience_years
+    def reject(self, admin_id: EntityId) -> None:
+        self.verification_status = VerificationStatus.REJECTED
+        self.verified_by = admin_id
+
+    def generate_whatsapp_link(self, message: str = "") -> str:
+        # PrevenRed WhatsApp Deeplink Integration (RF-13, CU-22)
+        phone = self.phone_number.replace("+", "")
+        base_msg = (
+            message.strip()
+            or f"Hola {self.full_name}, te contacto desde PrevenRed - OficiosYa Pereira."
         )
-        self.specialties = cleaned
-        self.experience_years = experience_years
-        self.availability = availability.strip()
-        if verification_changed and self.verification_status == "VERIFICADO":
-            self.verification_status = "PENDIENTE"
-
-    def _validate(self) -> None:
-        _check_profile(self.specialties, self.experience_years)
-        if not self.user_id.strip():
-            raise ValidationError("El perfil debe pertenecer a una cuenta.")
-
-
-def _check_profile(specialties: list[str], experience_years: int) -> None:
-    if not specialties:
-        raise ValidationError("Indica al menos una especialidad.")
-    if experience_years < 0:
-        raise ValidationError("Los años de experiencia no pueden ser negativos.")
+        encoded_text = urllib.parse.quote(base_msg)
+        return f"https://wa.me/{phone}?text={encoded_text}"

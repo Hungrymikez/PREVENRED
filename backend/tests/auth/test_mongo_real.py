@@ -1,4 +1,5 @@
 """Misma garantía de correo único, pero contra MongoDB real (se omite si no hay MONGO_TEST_URI)."""
+
 import pytest
 
 from prevenred.auth.domain.role import Role
@@ -15,8 +16,12 @@ def test_correo_unico_en_mongo_real(real_db):
 
     def new():
         return User.register(
-            full_name="Luis Mora", email=Email("luis@mail.com"), password_hash="h",
-            role=Role.CIUDADANO, neighborhood="Cuba", privacy_notice_version="v1",
+            full_name="Luis Mora",
+            email=Email("luis@mail.com"),
+            password_hash="h",
+            role=Role.CIUDADANO,
+            neighborhood="Cuba",
+            privacy_notice_version="v1",
             accepted_terms=True,
         )
 

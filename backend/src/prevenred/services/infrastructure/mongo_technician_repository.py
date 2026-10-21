@@ -1,63 +1,103 @@
-"""Repositorio de técnicos sobre la colección technicians."""
-from bson import ObjectId
-from pymongo.database import Database
+from typing import Any
 
-from prevenred.services.domain.repositories import TechnicianRepository
-from prevenred.services.domain.technician import Technician
-from prevenred.shared.domain.errors import ValidationError
+from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo import GEOSPHERE
 
-COLLECTION = "technicians"
+from prevenred.shared.domain.ids import EntityId
 
-
-def _oid(value: str) -> ObjectId:
-    if not ObjectId.is_valid(value):
-        raise ValidationError("El identificador de usuario no es válido.")
-    return ObjectId(value)
-
-
-def _to_entity(doc: dict) -> Technician:
-    return Technician(
-        id=str(doc["_id"]),
-        user_id=str(doc["userId"]),
-        specialties=list(doc.get("specialties") or []),
-        experience_years=int(doc.get("experienceYears") or 0),
-        availability=str((doc.get("availability") or {}).get("label", "")),
-        verification_status=doc.get("verificationStatus") or "PENDIENTE",
-    )
+from ..domain.repositories import TechnicianRepository
+from ..domain.technician import Specialty, TechnicianProfile, VerificationStatus
 
 
 class MongoTechnicianRepository(TechnicianRepository):
-    """TechnicianRepository sobre MongoDB. Solo traduce; no decide reglas."""
+    COLLECTION_NAME = "technicians"
 
-    def __init__(self, db: Database) -> None:
-        self._technicians = db[COLLECTION]
+    def __init__(self, database: AsyncIOMotorDatabase) -> None:
+        self._collection = database[self.COLLECTION_NAME]
 
-    def get_by_user_id(self, user_id: str) -> Technician | None:
-        doc = self._technicians.find_one({"userId": _oid(user_id)})
-        return _to_entity(doc) if doc else None
+    async def create_indexes(self) -> None:
+        await self._collection.create_index([("location", GEOSPHERE)])
+        await self._collection.create_index("user_id", unique=True)
+        await self._collection.create_index("verification_status")
+        await self._collection.create_index("specialties")
 
-    def add(self, technician: Technician) -> None:
-        self._technicians.insert_one({
-            "_id": ObjectId(technician.id),
-            "userId": _oid(technician.user_id),
-            "specialties": technician.specialties,
-            "experienceYears": technician.experience_years,
-            "portfolio": [],
-            "verificationStatus": technician.verification_status,
-            "availability": {"label": technician.availability},
-            "rating": None,
-            "documents": [],
-            "verifiedBy": None,
-            "verifiedAt": None,
-        })
+    def _to_doc(self, profile: TechnicianProfile) -> dict[str, Any]:
+        return {
+            "_id": profile.id.value,
+            "user_id": profile.user_id.value,
+            "full_name": profile.full_name,
+            "phone_number": profile.phone_number,
+            "specialties": [s.value for s in profile.specialties],
+            "experience_years": profile.experience_years,
+            "bio": profile.bio,
+            "verification_status": profile.verification_status.value,
+            "rating_average": profile.rating_average,
+            "reviews_count": profile.reviews_count,
+            "location": {
+                "type": "Point",
+                "coordinates": [profile.longitude, profile.latitude],
+            },
+            "created_at": profile.created_at,
+            "verified_by": profile.verified_by.value if profile.verified_by else None,
+        }
 
-    def update(self, technician: Technician) -> None:
-        self._technicians.update_one(
-            {"_id": ObjectId(technician.id)},
-            {"$set": {
-                "specialties": technician.specialties,
-                "experienceYears": technician.experience_years,
-                "verificationStatus": technician.verification_status,
-                "availability": {"label": technician.availability},
-            }},
+    def _to_entity(self, doc: dict[str, Any]) -> TechnicianProfile:
+        coords = doc["location"]["coordinates"]
+        verified_by = EntityId(doc["verified_by"]) if doc.get("verified_by") else None
+        return TechnicianProfile(
+            id=EntityId(str(doc["_id"])),
+            user_id=EntityId(str(doc["user_id"])),
+            full_name=doc["full_name"],
+            phone_number=doc["phone_number"],
+            specialties=[Specialty(s) for s in doc["specialties"]],
+            experience_years=int(doc["experience_years"]),
+            bio=doc.get("bio", ""),
+            verification_status=VerificationStatus(doc["verification_status"]),
+            rating_average=float(doc.get("rating_average", 0.0)),
+            reviews_count=int(doc.get("reviews_count", 0)),
+            longitude=float(coords[0]),
+            latitude=float(coords[1]),
+            created_at=doc["created_at"],
+            verified_by=verified_by,
         )
+
+    async def save(self, profile: TechnicianProfile) -> None:
+        doc = self._to_doc(profile)
+        await self._collection.replace_one({"_id": profile.id.value}, doc, upsert=True)
+
+    async def get_by_id(self, profile_id: EntityId) -> TechnicianProfile | None:
+        doc = await self._collection.find_one({"_id": profile_id.value})
+        return self._to_entity(doc) if doc else None
+
+    async def get_by_user_id(self, user_id: EntityId) -> TechnicianProfile | None:
+        doc = await self._collection.find_one({"user_id": user_id.value})
+        return self._to_entity(doc) if doc else None
+
+    async def search_nearby(
+        self,
+        longitude: float,
+        latitude: float,
+        max_distance_meters: float = 15000.0,
+        specialty: Specialty | None = None,
+        only_verified: bool = True,
+        limit: int = 50,
+    ) -> list[TechnicianProfile]:
+        filter_query: dict[str, Any] = {
+            "location": {
+                "$nearSphere": {
+                    "$geometry": {
+                        "type": "Point",
+                        "coordinates": [longitude, latitude],
+                    },
+                    "$maxDistance": max_distance_meters,
+                }
+            }
+        }
+        if only_verified:
+            filter_query["verification_status"] = VerificationStatus.VERIFIED.value
+        if specialty:
+            filter_query["specialties"] = specialty.value
+
+        cursor = self._collection.find(filter_query).limit(limit)
+        docs = await cursor.to_list(length=limit)
+        return [self._to_entity(d) for d in docs]

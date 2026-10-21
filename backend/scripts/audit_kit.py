@@ -48,8 +48,8 @@ def check_structure() -> None:
         "reglas_transversales.md", "indice_cu.md",
     ]
     missing += [f"docs/{name}" for name in doc_required if not (DOCS / name).exists()]
-    if not (ROOT.parent / "documentos" / "PLAN_BACKEND.md").exists():
-        missing.append("documentos/PLAN_BACKEND.md")
+    if not (DOCS / "PLAN_BACKEND.md").exists():
+        missing.append("docs/PLAN_BACKEND.md")
     check("FALLA" if missing else "OK", "E1 archivos esenciales", f"faltan: {missing}" if missing else f"{len(required)} presentes")
 
 
@@ -106,7 +106,7 @@ def check_context_mapping() -> None:
 
 # ---------------------------------------------------------------- 4. plan cubre CU 03..48
 def check_plan_phases() -> None:
-    plan = read(ROOT.parent / "documentos" / "PLAN_BACKEND.md")
+    plan = read(DOCS / "PLAN_BACKEND.md")
     m = re.search(r"## 7\. Fases(.*?)## 8\.", plan, re.S)
     if not m:
         check("FALLA", "P1 sección de fases en el plan", "no se encontró")

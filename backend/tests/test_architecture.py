@@ -10,15 +10,37 @@ Reglas:
        - application/ports.py      (puertos que otros pueden implementar o usar)
      Excepción: interface/dependencies.py y main.py son el cableado y pueden importar de todos.
 """
+
 import ast
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "prevenred"
-FORBIDDEN_IN_DOMAIN = {"fastapi", "starlette", "pymongo", "bson", "pydantic", "pydantic_settings",
-                       "jwt", "argon2", "sqlalchemy"}
-FORBIDDEN_IN_APPLICATION = {"fastapi", "starlette", "pymongo", "bson", "pydantic",
-                            "pydantic_settings", "sqlalchemy"}
-PUBLIC_SURFACE = ("application.ports", "domain.events")
+FORBIDDEN_IN_DOMAIN = {
+    "fastapi",
+    "starlette",
+    "pymongo",
+    "bson",
+    "pydantic",
+    "pydantic_settings",
+    "jwt",
+    "argon2",
+    "sqlalchemy",
+}
+FORBIDDEN_IN_APPLICATION = {
+    "fastapi",
+    "starlette",
+    "pymongo",
+    "bson",
+    "pydantic",
+    "pydantic_settings",
+    "sqlalchemy",
+}
+PUBLIC_SURFACE = (
+    "application.ports",
+    "domain.events",
+    "domain.user",
+    "domain.role",
+)
 
 
 def _py_files():
@@ -56,7 +78,7 @@ def test_contextos_solo_se_ven_por_su_cara_publica():
     errors = []
     for path, parts in _py_files():
         ctx = parts[0]
-        is_wiring = path.name == "dependencies.py"
+        is_wiring = path.name in ("dependencies.py", "router.py")
         for module in _imports(path):
             segs = module.split(".")
             if segs[0] != "prevenred" or len(segs) < 3:

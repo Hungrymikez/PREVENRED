@@ -2,9 +2,10 @@
 Configuración leída de variables de entorno / archivo .env.
 Así los secretos NO viven en el código (ver .env.example).
 """
+
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _INSECURE_JWT_MARKERS = ("cambia-esto", "pon-aqui", "changeme", "secret")
@@ -12,11 +13,19 @@ _INSECURE_JWT_MARKERS = ("cambia-esto", "pon-aqui", "changeme", "secret")
 
 class Settings(BaseSettings):
     """Ajustes de la aplicación leídos de variables de entorno o del archivo .env."""
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
     # MongoDB (documento 09). Local: docker compose up -d. En la nube: cadena de MongoDB Atlas.
-    mongo_uri: str = "mongodb://localhost:27017"
-    mongo_db_name: str = "PrevenRED2"
+    # Soporta MONGO_URI o MONGODB_URI, y MONGO_DB_NAME o MONGODB_DB_NAME.
+    mongo_uri: str = Field(
+        default="mongodb://localhost:27017",
+        validation_alias=AliasChoices("mongo_uri", "mongodb_uri"),
+    )
+    mongo_db_name: str = Field(
+        default="PrevenRED2",
+        validation_alias=AliasChoices("mongo_db_name", "mongodb_db_name"),
+    )
 
     # Sin valor por defecto: si falta JWT_SECRET, Pydantic rechaza el arranque.
     jwt_secret: str
@@ -34,8 +43,7 @@ class Settings(BaseSettings):
         secret = value.strip()
         lowered = secret.lower()
         insecure = any(
-            lowered.startswith(marker) or lowered == marker
-            for marker in _INSECURE_JWT_MARKERS
+            lowered.startswith(marker) or lowered == marker for marker in _INSECURE_JWT_MARKERS
         )
         if len(secret) < 32 or insecure:
             raise ValueError(

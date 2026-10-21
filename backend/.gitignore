@@ -1,5 +1,44 @@
+# --- Entornos virtuales y secretos ---
 .venv/
-__pycache__/
+venv/
 .env
+.env.*
+!.env.example
+
+# --- Cachés y artefactos de Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# --- Pruebas, cobertura y linters ---
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# --- Archivos subidos en desarrollo (media/uploads) ---
+uploads/
+
+# --- Scripts y salidas temporales en la raíz del backend ---
+/tmp_*.py
+/temp_*.py
+/scratch*.py
+/debug_*.py
+/*.tmp
+/*.log
+
+# --- IDE y sistema operativo ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.clinerules
+.clineignore
+# --- Configuración local del asistente de IA Cline ---
+.clinerules
+.clineignore

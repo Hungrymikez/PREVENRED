@@ -1,4 +1,5 @@
 """EventBus en memoria: suficiente para la v1.0 (un solo proceso)."""
+
 from collections import defaultdict
 from collections.abc import Callable
 
@@ -8,6 +9,7 @@ from prevenred.shared.domain.events import DomainEvent
 
 class InMemoryEventBus(EventBus):
     """Bus de eventos en memoria: suficiente mientras la API corra en un solo proceso."""
+
     def __init__(self) -> None:
         self._handlers: dict[type, list[Callable[[DomainEvent], None]]] = defaultdict(list)
 

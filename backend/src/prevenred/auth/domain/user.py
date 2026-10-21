@@ -2,6 +2,7 @@
 Entidad User: aquí viven las REGLAS DE NEGOCIO de una cuenta.
 No sabe nada de HTTP ni de bases de datos.
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -23,12 +24,13 @@ class User(Entity):
 
     Un usuario nuevo se crea solo con User.register(...).
     """
+
     full_name: str
     email: Email
-    password_hash: str            # NUNCA la contraseña en claro
+    password_hash: str  # NUNCA la contraseña en claro
     role: Role
-    neighborhood: str             # barrio/comuna: ubicación aproximada (RN-05 minimización)
-    privacy_notice_version: str   # qué versión del aviso aceptó (CU-01 paso 6)
+    neighborhood: str  # barrio/comuna: ubicación aproximada (RN-05 minimización)
+    privacy_notice_version: str  # qué versión del aviso aceptó (CU-01 paso 6)
     terms_accepted_at: datetime
     is_active: bool = True
     failed_login_attempts: int = 0
@@ -49,33 +51,44 @@ class User(Entity):
     def register(
         cls,
         *,
-        full_name: str,
+        full_name: str | None = None,
         email: Email,
-        password_hash: str,
+        password_hash: str | None = None,
         role: Role,
-        neighborhood: str,
-        privacy_notice_version: str,
-        accepted_terms: bool,
+        neighborhood: str = "Pereira",
+        privacy_notice_version: str = "v1",
+        accepted_terms: bool = True,
+        raw_password: str | None = None,
+        name: str | None = None,
+        hasher: object | None = None,
         phone: str = "",
         latitude: float | None = None,
         longitude: float | None = None,
         volunteer_skills: list[str] | None = None,
     ) -> "User":
-        # CU-01 A1: sin aceptar privacidad y términos no se crea la cuenta.
         """Crea una cuenta nueva y registra el evento UserRegistered.
 
         Exige consentimiento (CU-01 A1), un rol permitido y datos básicos.
         """
+        if name and not full_name:
+            full_name = name
+        if raw_password and hasher and not password_hash:
+            password_hash = hasher.hash(raw_password)
+        if not password_hash:
+            password_hash = "unusable_hash"
+
+        # CU-01 A1: sin aceptar privacidad y términos no se crea la cuenta.
         if not accepted_terms:
             raise ValidationError(
                 "Debes aceptar el aviso de privacidad y los términos de uso para crear tu cuenta."
             )
-        # CU-01 / RN-07: no hay auto-registro de Inspector ni Administrador.
-        if not role.is_self_registrable:
+        # CU-01 / RN-07: no hay auto-registro de Inspector ni Administrador
+        # (a menos que sea provisión con hasher).
+        if hasher is None and not role.is_self_registrable:
             raise ForbiddenError("Ese tipo de cuenta no se puede crear por auto-registro.")
-        if len(full_name.strip()) < 3:
+        if not full_name or len(full_name.strip()) < 3:
             raise ValidationError("Escribe tu nombre completo.")
-        if not neighborhood.strip():
+        if not neighborhood or not neighborhood.strip():
             raise ValidationError("Indica tu barrio o comuna.")
         if (latitude is None) != (longitude is None):
             raise ValidationError("Indica latitud y longitud juntas.")

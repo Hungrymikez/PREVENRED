@@ -1,65 +1,100 @@
-"""Perfil de voluntario (CU-43). Las reglas viven aquí, no en Mongo."""
+"""Entidades y tipos de dominio para gestión y asignación de voluntarios."""
+
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
 
 from prevenred.shared.domain.entity import Entity
-from prevenred.shared.domain.errors import ValidationError
+from prevenred.shared.domain.errors import DomainValidationError
+from prevenred.shared.domain.ids import EntityId
 
 
-@dataclass(kw_only=True, eq=False)
-class Volunteer(Entity):
-    """Perfil de un voluntario vinculado a una cuenta."""
-    user_id: str
-    skills: list[str]
-    availability: str
-    latitude: float
+class VolunteerSkill(StrEnum):
+    PRIMEROS_AUXILIOS = "PRIMEROS_AUXILIOS"
+    RESCATE = "RESCATE"
+    LOGISTICA = "LOGISTICA"
+    APOYO_PSICOLOGICO = "APOYO_PSICOLOGICO"
+    CONDUCCION = "CONDUCCION"
+    REMOCION_ESCOMBROS = "REMOCION_ESCOMBROS"
+    OTRO = "OTRO"
+
+
+class AssignmentStatus(StrEnum):
+    ASIGNADO = "ASIGNADO"
+    EN_CAMINO = "EN_CAMINO"
+    COMPLETADO = "COMPLETADO"
+    CANCELADO = "CANCELADO"
+
+
+@dataclass
+class VolunteerProfile(Entity):
+    user_id: EntityId
+    full_name: str
+    phone_number: str
+    skills: list[VolunteerSkill]
+    is_available: bool
     longitude: float
-    authorization_status: str = "PENDIENTE"
+    latitude: float
+    created_at: datetime
 
     @classmethod
-    def register(
+    def create(
         cls,
-        *,
-        user_id: str,
-        skills: list[str],
-        availability: str,
-        latitude: float,
+        user_id: EntityId,
+        full_name: str,
+        phone_number: str,
+        skills: list[VolunteerSkill],
         longitude: float,
-    ) -> "Volunteer":
-        """Crea el perfil de voluntario."""
-        volunteer = cls(
+        latitude: float,
+    ) -> "VolunteerProfile":
+        if not full_name or len(full_name.strip()) < 3:
+            raise DomainValidationError("El nombre completo debe tener al menos 3 caracteres.")
+        if not skills:
+            raise DomainValidationError("Debe indicar al menos una habilidad de voluntariado.")
+        if not (-180.0 <= longitude <= 180.0 and -90.0 <= latitude <= 90.0):
+            raise DomainValidationError("Coordenadas geográficas inválidas.")
+
+        return cls(
+            id=EntityId.generate(),
             user_id=user_id,
-            skills=[item.strip() for item in skills if item.strip()],
-            availability=availability.strip(),
-            latitude=latitude,
+            full_name=full_name.strip(),
+            phone_number=phone_number.strip(),
+            skills=skills,
+            is_available=True,
             longitude=longitude,
+            latitude=latitude,
+            created_at=datetime.now(UTC),
         )
-        volunteer._validate()
-        return volunteer
-
-    def update_profile(
-        self,
-        *,
-        skills: list[str],
-        availability: str,
-        latitude: float,
-        longitude: float,
-    ) -> None:
-        """Actualiza habilidades, disponibilidad y ubicación ya validadas."""
-        cleaned = [item.strip() for item in skills if item.strip()]
-        _check(cleaned, latitude, longitude)
-        self.skills = cleaned
-        self.availability = availability.strip()
-        self.latitude = latitude
-        self.longitude = longitude
-
-    def _validate(self) -> None:
-        if not self.user_id.strip():
-            raise ValidationError("El perfil debe pertenecer a una cuenta.")
-        _check(self.skills, self.latitude, self.longitude)
 
 
-def _check(skills: list[str], latitude: float, longitude: float) -> None:
-    if not skills:
-        raise ValidationError("Indica al menos una habilidad.")
-    if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
-        raise ValidationError("La ubicación no es válida.")
+@dataclass
+class VolunteerAssignment(Entity):
+    volunteer_id: EntityId
+    incident_id: EntityId
+    task_description: str
+    status: AssignmentStatus
+    assigned_by: EntityId
+    created_at: datetime
+
+    @classmethod
+    def create(
+        cls,
+        volunteer_id: EntityId,
+        incident_id: EntityId,
+        task_description: str,
+        assigned_by: EntityId,
+    ) -> "VolunteerAssignment":
+        if not task_description or len(task_description.strip()) < 5:
+            raise DomainValidationError(
+                "La descripción de la tarea debe tener al menos 5 caracteres."
+            )
+
+        return cls(
+            id=EntityId.generate(),
+            volunteer_id=volunteer_id,
+            incident_id=incident_id,
+            task_description=task_description.strip(),
+            status=AssignmentStatus.ASIGNADO,
+            assigned_by=assigned_by,
+            created_at=datetime.now(UTC),
+        )

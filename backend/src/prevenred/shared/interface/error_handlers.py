@@ -2,6 +2,7 @@
 Traduce errores de dominio a respuestas HTTP con un formato uniforme:
     {"error": {"code": "conflict", "message": "..."}}
 """
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 

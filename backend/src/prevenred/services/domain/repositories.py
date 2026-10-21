@@ -1,20 +1,31 @@
-"""Puerto del repositorio de técnicos. La aplicación no habla con Mongo."""
 from abc import ABC, abstractmethod
 
-from prevenred.services.domain.technician import Technician
+from prevenred.shared.domain.ids import EntityId
+
+from .technician import Specialty, TechnicianProfile
 
 
 class TechnicianRepository(ABC):
-    """Persistencia del perfil de técnico."""
+    @abstractmethod
+    async def save(self, profile: TechnicianProfile) -> None:
+        pass
 
     @abstractmethod
-    def get_by_user_id(self, user_id: str) -> Technician | None:
-        """Devuelve el perfil de esa cuenta, o None si aún no existe."""
+    async def get_by_id(self, profile_id: EntityId) -> TechnicianProfile | None:
+        pass
 
     @abstractmethod
-    def add(self, technician: Technician) -> None:
-        """Inserta un perfil nuevo."""
+    async def get_by_user_id(self, user_id: EntityId) -> TechnicianProfile | None:
+        pass
 
     @abstractmethod
-    def update(self, technician: Technician) -> None:
-        """Guarda el estado que ya validó la entidad."""
+    async def search_nearby(
+        self,
+        longitude: float,
+        latitude: float,
+        max_distance_meters: float = 15000.0,
+        specialty: Specialty | None = None,
+        only_verified: bool = True,
+        limit: int = 50,
+    ) -> list[TechnicianProfile]:
+        pass

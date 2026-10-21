@@ -2,6 +2,7 @@
 Índices de las colecciones de identity. Se crean al arrancar la app (idempotente).
 En MongoDB la unicidad del correo la garantiza el ÍNDICE, no solo el código.
 """
+
 from pymongo.database import Database
 
 from prevenred.shared.infrastructure.mongo import ensure_index

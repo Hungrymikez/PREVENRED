@@ -1,20 +1,31 @@
-"""Puerto del repositorio de voluntarios."""
+"""Interfaces de repositorio para perfiles y asignaciones de voluntariado."""
+
 from abc import ABC, abstractmethod
 
-from prevenred.volunteering.domain.volunteer import Volunteer
+from prevenred.shared.domain.ids import EntityId
+
+from .volunteer import VolunteerAssignment, VolunteerProfile
 
 
 class VolunteerRepository(ABC):
-    """Persistencia del perfil de voluntario."""
+    @abstractmethod
+    async def save_profile(self, profile: VolunteerProfile) -> None:
+        pass
 
     @abstractmethod
-    def get_by_user_id(self, user_id: str) -> Volunteer | None:
-        """Devuelve el perfil de esa cuenta, o None si aún no existe."""
+    async def get_by_user_id(self, user_id: EntityId) -> VolunteerProfile | None:
+        pass
 
     @abstractmethod
-    def add(self, volunteer: Volunteer) -> None:
-        """Inserta un perfil nuevo."""
+    async def get_by_id(self, volunteer_id: EntityId) -> VolunteerProfile | None:
+        pass
 
     @abstractmethod
-    def update(self, volunteer: Volunteer) -> None:
-        """Guarda el estado que ya validó la entidad."""
+    async def save_assignment(self, assignment: VolunteerAssignment) -> None:
+        pass
+
+    @abstractmethod
+    async def list_assignments_by_volunteer(
+        self, volunteer_id: EntityId
+    ) -> list[VolunteerAssignment]:
+        pass

@@ -22,29 +22,40 @@ class DomainError(Exception):
 
 class ValidationError(DomainError):
     """Datos inválidos o incompletos (excepción E2 de las fichas)."""
+
     code = "validation_error"
 
 
 class ConflictError(DomainError):
     """El recurso ya existe, p. ej. correo ya registrado (E1 de CU-01)."""
+
     code = "conflict"
 
 
 class NotFoundError(DomainError):
     """El recurso pedido no existe."""
+
     code = "not_found"
 
 
 class UnauthorizedError(DomainError):
     """Credenciales o sesión inválidas."""
+
     code = "unauthorized"
 
 
 class ForbiddenError(DomainError):
     """Autenticado, pero sin permiso para esta acción (RBAC, RF-03)."""
+
     code = "forbidden"
 
 
 class TooManyAttemptsError(DomainError):
     """Bloqueo temporal por intentos repetidos (RNF-14)."""
+
     code = "too_many_attempts"
+
+
+# Aliases para compatibilidad con módulos de marketplace y services
+DomainValidationError = ValidationError
+AuthorizationError = ForbiddenError
