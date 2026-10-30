@@ -5,6 +5,7 @@ import { LayoutAuth } from '@/layouts/LayoutAuth'
 import { LayoutPrincipal } from '@/layouts/LayoutPrincipal'
 import Inicio from '@/pages/Inicio'
 import { NoEncontrado, SinPermiso } from '@/pages/PaginaMensaje'
+import { RutaEmergencia } from '@/routes/RutaEmergencia'
 import { RutaProtegida, RutaPublica } from '@/routes/RutaProtegida'
 
 // Cada página se descarga solo cuando se visita (la app abre más rápido, sobre todo en celular).
@@ -17,6 +18,10 @@ const Publicar = lazy(() => import('@/pages/segundavida/Publicar'))
 const OficiosYa = lazy(() => import('@/pages/oficiosya/OficiosYa'))
 const PerfilTecnico = lazy(() => import('@/pages/oficiosya/PerfilTecnico'))
 const MenteResiliente = lazy(() => import('@/pages/menteresiliente/MenteResiliente'))
+const Emergencia = lazy(() => import('@/pages/emergencia/Emergencia'))
+const Reportar = lazy(() => import('@/pages/emergencia/Reportar'))
+const MisCasos = lazy(() => import('@/pages/emergencia/MisCasos'))
+const DetalleCaso = lazy(() => import('@/pages/emergencia/DetalleCaso'))
 
 export default function App() {
   return (
@@ -44,6 +49,15 @@ export default function App() {
             <Route path="/oficiosya" element={<OficiosYa />} />
             <Route path="/oficiosya/:id" element={<PerfilTecnico />} />
             <Route path="/mente-resiliente" element={<MenteResiliente />} />
+
+            {/* Modo Emergencia: reportar solo con la emergencia activa (CU-29 E3) */}
+            <Route element={<RutaEmergencia />}>
+              <Route path="/emergencia" element={<Emergencia />} />
+              <Route path="/emergencia/reportar/:categoria" element={<Reportar />} />
+            </Route>
+            {/* Los casos se pueden consultar también después de la emergencia (CU-32) */}
+            <Route path="/emergencia/casos" element={<MisCasos />} />
+            <Route path="/emergencia/casos/:caseId" element={<DetalleCaso />} />
           </Route>
         </Route>
 
