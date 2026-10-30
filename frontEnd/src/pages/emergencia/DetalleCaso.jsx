@@ -25,6 +25,7 @@ export default function DetalleCaso() {
   } = useQuery({
     queryKey: ['caso', caseId],
     queryFn: () => obtenerCaso(caseId),
+    networkMode: 'offlineFirst',
   })
 
   return (

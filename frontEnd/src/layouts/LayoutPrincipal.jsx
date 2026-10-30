@@ -4,6 +4,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router'
 import { BannerEmergencia } from '@/components/BannerEmergencia'
 import { Logo } from '@/components/Logo'
 import { SimuladorModo } from '@/components/SimuladorModo'
+import { Sincronizador } from '@/components/Sincronizador'
 import { Boton } from '@/components/ui/Boton'
 import { Cargando } from '@/components/ui/Estados'
 import { useAuth } from '@/hooks/useAuth'
@@ -60,6 +61,7 @@ export function LayoutPrincipal() {
         </div>
       </header>
       {enEmergencia && <BannerEmergencia modo={modo} />}
+      <Sincronizador />
 
       <main className="mx-auto max-w-5xl px-4 pt-6 pb-24 md:pb-10">
         {/* Al cambiar de sección solo el contenido muestra "Cargando", el menú se queda. */}

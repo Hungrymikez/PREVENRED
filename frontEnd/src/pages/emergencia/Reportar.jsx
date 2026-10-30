@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Camera, CircleCheck, X } from 'lucide-react'
+import { Camera, CircleCheck, HardDrive, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { mensajeDeError } from '@/api/client'
 import { CATEGORIAS_REPORTE, crearReporte } from '@/api/incidentes'
 import { SelectorUbicacion } from '@/components/mapa/SelectorUbicacion'
 import { Alerta } from '@/components/ui/Alerta'
@@ -9,10 +10,33 @@ import { Boton } from '@/components/ui/Boton'
 import { Campo } from '@/components/ui/Campo'
 import { SinResultados } from '@/components/ui/Estados'
 import { Volver } from '@/components/ui/Volver'
+import { guardarPendiente, hayEspacio } from '@/offline/almacen'
 
 const TAMANO_MAXIMO_FOTO_MB = 10
 const PASOS = ['¿Qué pasó?', 'Foto y detalles', '¿Dónde es?']
 const TIPOS_QUE_EXIGEN_DESCRIPCION = ['OTRO_DANO', 'OTRO_INCIDENTE', 'OTRA_NECESIDAD']
+
+/**
+ * Con señal envía el reporte; sin señal (o si la red falla al enviar) lo guarda cifrado
+ * en el celular para enviarlo solo después (CU-29 A1, CU-30 A1, CU-31 A1, CU-37).
+ * Devuelve { caso } si llegó al servidor o { pendiente } si quedó guardado.
+ */
+async function enviarOGuardar(reporte) {
+  if (navigator.onLine) {
+    try {
+      return { caso: await crearReporte(reporte) }
+    } catch (error) {
+      if (error?.response) throw error // el servidor respondió con un error: no es falta de red
+    }
+  }
+  if (!(await hayEspacio())) {
+    // E2 de CU-37: se avisa antes de intentar guardar.
+    throw Object.assign(new Error('Tu celular no tiene espacio para guardar el reporte.'), {
+      paraMostrar: true,
+    })
+  }
+  return { pendiente: await guardarPendiente(reporte) }
+}
 
 /** CU-29, CU-30 y CU-31: reporte en 3 pasos (RNF-10). */
 export default function Reportar() {
@@ -31,15 +55,23 @@ export default function Reportar() {
   const [errores, setErrores] = useState({})
 
   const envio = useMutation({
-    mutationFn: () => crearReporte({ categoria, ...datos }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mis-casos'] }),
+    networkMode: 'always', // sin conexión igual se ejecuta: el reporte se guarda en el celular
+    mutationFn: () => enviarOGuardar({ categoria, ...datos }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mis-casos'] })
+      queryClient.invalidateQueries({ queryKey: ['pendientes'] })
+    },
   })
 
   if (!config) {
     return <SinResultados titulo="Ese tipo de reporte no existe" />
   }
   if (envio.isSuccess) {
-    return <Confirmacion caso={envio.data} />
+    return envio.data.caso ? (
+      <Confirmacion caso={envio.data.caso} />
+    ) : (
+      <ConfirmacionSinConexion categoria={categoria} />
+    )
   }
 
   const esAyuda = categoria === 'ayuda'
@@ -183,7 +215,12 @@ export default function Reportar() {
 
         {envio.error && (
           <Alerta tipo="error">
-            No se pudo enviar el reporte. Tus datos siguen aquí: intenta de nuevo.
+            {envio.error.paraMostrar
+              ? envio.error.message
+              : envio.error.response
+                ? mensajeDeError(envio.error)
+                : 'No se pudo enviar ni guardar el reporte.'}{' '}
+            Tus datos siguen aquí: intenta de nuevo.
           </Alerta>
         )}
 
@@ -282,6 +319,44 @@ function Confirmacion({ caso }) {
           className="rounded-lg bg-marca-600 px-4 py-2.5 font-medium text-white hover:bg-marca-700"
         >
           Ver mi caso
+        </Link>
+        <Link
+          to="/emergencia"
+          className="rounded-lg border border-slate-300 px-4 py-2.5 font-medium text-slate-800 hover:bg-slate-50"
+        >
+          Hacer otro reporte
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+/** Confirmación cuando no había señal: el reporte quedó guardado en el celular (CU-37 paso 1). */
+function ConfirmacionSinConexion({ categoria }) {
+  return (
+    <div className="mx-auto max-w-xl rounded-2xl bg-white p-6 text-center shadow-sm" role="status">
+      <HardDrive className="mx-auto size-12 text-amber-600" aria-hidden="true" />
+      <h1 className="mt-3 text-2xl font-bold text-slate-900">Reporte guardado en tu celular</h1>
+      <p className="mt-2 text-slate-700">
+        No hay conexión en este momento. Se enviará solo cuando vuelva la señal y tengas PrevenRed
+        abierto. Si cierras la app, se envía la próxima vez que la abras. No necesitas reportarlo
+        otra vez.
+      </p>
+      <p className="mt-2 text-sm text-slate-600">
+        Cuando se envíe, verás su número de caso en Mis casos.
+      </p>
+      {categoria === 'vivienda' && (
+        <p className="mt-3 text-sm text-slate-600">
+          Este reporte no es una evaluación oficial de tu vivienda. Un inspector autorizado la
+          revisará.
+        </p>
+      )}
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+        <Link
+          to="/emergencia/casos"
+          className="rounded-lg bg-marca-600 px-4 py-2.5 font-medium text-white hover:bg-marca-700"
+        >
+          Ver pendientes
         </Link>
         <Link
           to="/emergencia"

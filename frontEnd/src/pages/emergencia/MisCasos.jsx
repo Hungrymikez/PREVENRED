@@ -8,6 +8,7 @@ import { Campo } from '@/components/ui/Campo'
 import { Cargando, ErrorAlCargar, SinResultados } from '@/components/ui/Estados'
 import { formatearFecha } from '@/utils/fechas'
 import { EstadoCaso } from './EstadoCaso'
+import { Pendientes } from './Pendientes'
 
 /** CU-32 · Consultar el estado de mis casos. */
 export default function MisCasos() {
@@ -20,6 +21,7 @@ export default function MisCasos() {
   } = useQuery({
     queryKey: ['mis-casos'],
     queryFn: listarMisCasos,
+    networkMode: 'offlineFirst', // sin señal intenta igual y muestra el error en vez de quedarse cargando
   })
 
   return (
@@ -46,6 +48,8 @@ export default function MisCasos() {
           <Search className="size-4" aria-hidden="true" />
         </Boton>
       </form>
+
+      <Pendientes />
 
       <div className="mt-6">
         {isPending ? (
