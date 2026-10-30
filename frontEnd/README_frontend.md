@@ -10,28 +10,33 @@ Aplicación web adaptable a celular y tablero institucional de **PrevenRed**, pl
 
 El frontend es la interfaz que usan los cuatro tipos de usuario de PrevenRed. La plataforma funciona en dos modos que comparten usuarios, autenticación y datos:
 
-| Modo | Qué ve el usuario |
-| --- | --- |
-| **Cotidiano** | SegundaVida Pereira (materiales y herramientas), OficiosYa Pereira (técnicos verificados) y Mente Resiliente (bienestar emocional anónimo). |
-| **Emergencia** | Reporte de incidentes georreferenciados, mapa multicapa, seguimiento del caso y movilización de recursos, técnicos y voluntarios. |
+| Modo           | Qué ve el usuario                                                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cotidiano**  | SegundaVida Pereira (materiales y herramientas), OficiosYa Pereira (técnicos verificados) y Mente Resiliente (bienestar emocional anónimo). |
+| **Emergencia** | Reporte de incidentes georreferenciados, mapa multicapa, seguimiento del caso y movilización de recursos, técnicos y voluntarios.           |
 
 La interfaz se reconfigura según el modo vigente (RF-01 y RF-02 de la especificación de requerimientos).
 
 ## 2. Roles y vistas
 
-| Rol | Vistas principales |
-| --- | --- |
-| **Ciudadano** | Inicio, SegundaVida, OficiosYa, Mente Resiliente, reportar incidente, seguimiento de mis reportes. |
-| **Técnico / voluntario** | Perfil verificado, portafolio, disponibilidad, asignaciones de apoyo. |
-| **Inspector** | Formularios de campo, registro de evidencias (también sin conexión), asignaciones. |
+| Rol                             | Vistas principales                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Ciudadano**                   | Inicio, SegundaVida, OficiosYa, Mente Resiliente, reportar incidente, seguimiento de mis reportes.                              |
+| **Técnico / voluntario**        | Perfil verificado, portafolio, disponibilidad, asignaciones de apoyo.                                                           |
+| **Inspector**                   | Formularios de campo, registro de evidencias (también sin conexión), asignaciones.                                              |
 | **Coordinador / administrador** | Tablero institucional con mapa, validación y priorización de reportes, activación del Modo Emergencia, indicadores y auditoría. |
 
 ## 3. Stack tecnológico
 
-- **React** (interfaz) y **Bootstrap** (estilos y componentes responsive)
+- **React** + **Vite** (interfaz y servidor de desarrollo)
+- **Tailwind CSS** (estilos utilitarios y diseño responsive, primero para celular)
 - **React Router** (navegación)
+- **React Hook Form + Zod** (formularios y validación)
+- **Lucide** (íconos)
+- **Prettier + Oxlint** (formato y revisión del código: `npm run format`, `npm run lint`)
 - **Leaflet + OpenStreetMap** (mapas, sin costo de licencia)
-- **Axios** o `fetch` (consumo de la API REST del backend)
+- **Axios** (consumo de la API REST del backend) y **TanStack Query** (caché y estados de carga)
+- **Vitest + Testing Library** (pruebas: `npm test`)
 
 ## 4. Requisitos
 
@@ -43,8 +48,8 @@ La interfaz se reconfigura según el modo vigente (RF-01 y RF-02 de la especific
 
 ```bash
 # 1. Clonar el repositorio
-git clone <URL_DEL_REPOSITORIO>
-cd prevenred/frontend
+git clone https://github.com/Hungrymikez/PREVENRED.git
+cd PREVENRED/frontEnd
 
 # 2. Instalar dependencias
 npm install
@@ -56,12 +61,12 @@ cp .env.example .env
 npm run dev
 ```
 
-Por defecto la app queda en `http://localhost:5173` (si el proyecto se crea con Vite).
+La app queda en `http://localhost:5173`. En desarrollo, Vite reenvía las llamadas a `/api` al backend en `http://localhost:8000` (ver `vite.config.js`), así que el backend debe estar corriendo.
 
 ### Variables de entorno (`.env`)
 
 ```env
-VITE_API_URL=http://localhost:8000/api/v1
+VITE_API_URL=/api/v1
 VITE_MAP_CENTER_LAT=4.8133
 VITE_MAP_CENTER_LNG=-75.6961
 VITE_MAP_DEFAULT_ZOOM=13
@@ -71,17 +76,19 @@ VITE_MAP_DEFAULT_ZOOM=13
 
 ### Scripts disponibles
 
-| Comando | Descripción |
-| --- | --- |
-| `npm run dev` | Servidor de desarrollo con recarga en caliente. |
-| `npm run build` | Compilación de producción en `dist/`. |
-| `npm run preview` | Previsualiza la compilación de producción. |
-| `npm run lint` | Revisión de estilo y errores con ESLint. |
+| Comando           | Descripción                                                                |
+| ----------------- | -------------------------------------------------------------------------- |
+| `npm run dev`     | Servidor de desarrollo con recarga en caliente.                            |
+| `npm run build`   | Compilación de producción en `dist/`.                                      |
+| `npm run preview` | Previsualiza la compilación de producción.                                 |
+| `npm run lint`    | Revisión de errores con Oxlint.                                            |
+| `npm run format`  | Da formato al código con Prettier (también ordena las clases de Tailwind). |
+| `npm test`        | Corre las pruebas una vez (`npm run test:watch` las repite al guardar).    |
 
 ## 6. Estructura sugerida del proyecto
 
 ```
-frontend/
+frontEnd/
 ├── public/
 ├── src/
 │   ├── api/              # Cliente HTTP y llamadas por recurso
@@ -110,16 +117,22 @@ frontend/
 Siguen las etapas de la especificación: levantamiento y arquitectura, Modo Cotidiano, Modo Emergencia, pruebas y simulacro, puesta en operación.
 
 **Etapa 1 · Base**
-- [ ] Registro y login (ciudadano o técnico/voluntario)
-- [ ] Rutas protegidas por rol
-- [ ] Layout responsive pensado primero para celular
+
+- [x] Registro y login (ciudadano o técnico/voluntario)
+- [x] Rutas protegidas por rol
+- [x] Layout responsive pensado primero para celular
 
 **Etapa 2 · Modo Cotidiano**
-- [ ] SegundaVida: publicar, buscar, filtrar, intercambio, venta y alquiler
-- [ ] OficiosYa: filtro por especialidad, zona, disponibilidad y valoración; lista y mapa; contacto por enlace autorizado de WhatsApp; calificación (RF-09)
-- [ ] Mente Resiliente: participación anónima
+
+> Las pantallas de esta etapa ya existen con **datos de prueba** (`src/api/mocks/`). Cuando el backend publique los endpoints, solo cambian las funciones de `src/api/segundavida.js`, `oficiosya.js` y `bienestar.js`.
+
+- [x] SegundaVida: publicar, buscar, filtrar, intercambio, venta y alquiler _(datos de prueba; faltan fotos y solicitud de alquiler)_
+- [x] OficiosYa: filtro por especialidad, zona, disponibilidad y valoración; lista y mapa; contacto por enlace autorizado de WhatsApp _(datos de prueba)_
+- [ ] OficiosYa: calificar al técnico (RF-09) y pedir cotización (CU-20)
+- [x] Mente Resiliente: consentimiento, registro anónimo de ánimo y líneas de apoyo _(datos de prueba; falta el número oficial de la línea)_
 
 **Etapa 3 · Modo Emergencia**
+
 - [ ] Indicador visible del modo activo y reconfiguración de la interfaz (RF-02)
 - [ ] Formulario de reporte: ubicación, foto y descripción (RF-23)
 - [ ] Mapa multicapa con Leaflet (RF-19, RF-25)
@@ -127,6 +140,7 @@ Siguen las etapas de la especificación: levantamiento y arquitectura, Modo Coti
 - [ ] Tablero del coordinador: validar, priorizar, asignar recursos, técnicos y voluntarios (RF-27, RF-28)
 
 **Etapa 4 · Pruebas y simulacro**
+
 - [ ] Pruebas de usabilidad con usuarios reales
 - [ ] Simulacro de activación y reporte
 
@@ -134,7 +148,7 @@ Siguen las etapas de la especificación: levantamiento y arquitectura, Modo Coti
 
 - Referencia de accesibilidad: **WCAG 2.1 AA** (RNF-09): contraste suficiente, navegación por teclado, etiquetas en formularios, textos alternativos.
 - Enfoque **offline-first** (propuesta de implementación, a validar con el equipo):
-  - Convertir la app en **PWA** con *service worker* para guardar la interfaz y datos básicos.
+  - Convertir la app en **PWA** con _service worker_ para guardar la interfaz y datos básicos.
   - Guardar los reportes en el dispositivo (IndexedDB) con un identificador generado localmente.
   - Enviar la cola de reportes automáticamente al recuperar conexión, priorizando gravedad alta.
   - Precargar capas del mapa y datos de la zona durante el uso cotidiano.
@@ -143,9 +157,16 @@ Siguen las etapas de la especificación: levantamiento y arquitectura, Modo Coti
 
 - Metodología **Scrum**, con entregas incrementales.
 - Roles del equipo: frontend, backend y base de datos.
-- Ramas: `main` (estable), `develop` (integración) y `feature/<nombre>` por tarea.
+- Ramas: `main` (estable) y una rama por tarea creada desde `main`, con prefijo según el tipo de cambio:
+  - `feat/` nueva funcionalidad · ej. `feat/login-con-google`
+  - `fix/` corrección de un error · ej. `fix/boton-enviar-duplicado`
+  - `hotfix/` arreglo urgente en producción · ej. `hotfix/caida-checkout-pagos`
+  - `refactor/` mejora de código sin cambiar el comportamiento · ej. `refactor/limpieza-componente-tabla`
+  - `docs/` solo documentación · ej. `docs/actualizar-readme`
+  - `chore/` mantenimiento, dependencias o configuración · ej. `chore/actualizar-paquetes-npm`
+  - `test/` pruebas · ej. `test/unitarias-modulo-auth`
 - Commits en español, cortos y claros. Ejemplo: `feat: formulario de reporte de incidente`.
-- Todo cambio entra por *pull request* con al menos una revisión.
+- Todo cambio entra por _pull request_ con al menos una revisión.
 
 ## 10. Decisiones pendientes
 
