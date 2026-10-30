@@ -1,0 +1,29 @@
+# Revisa el frontend en cada push y pull request que lo modifique:
+# formato, lint, pruebas y compilación. Si algo falla, el PR lo muestra en rojo.
+name: Frontend
+
+on:
+  push:
+    branches: [main]
+    paths: ['frontEnd/**', '.github/workflows/frontend.yml']
+  pull_request:
+    paths: ['frontEnd/**', '.github/workflows/frontend.yml']
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontEnd
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontEnd/package-lock.json
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
