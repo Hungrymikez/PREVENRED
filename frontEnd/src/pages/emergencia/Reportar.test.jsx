@@ -66,3 +66,21 @@ describe('Pedir ayuda (CU-31)', () => {
     expect(screen.getByText('Indica al menos 1 persona.')).toBeInTheDocument()
   })
 })
+
+describe('Reportar sin conexión (CU-37)', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('guarda el reporte en el celular en vez de fallar', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    abrir('vivienda')
+
+    await userEvent.click(screen.getByLabelText('Grietas en muros'))
+    await siguiente()
+    await siguiente()
+    await userEvent.click(screen.getByRole('button', { name: 'Marcar en el mapa' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar reporte' }))
+
+    expect(await screen.findByText('Reporte guardado en tu celular')).toBeInTheDocument()
+    expect(screen.getByText(/no es una evaluación oficial/i)).toBeInTheDocument()
+  })
+})
