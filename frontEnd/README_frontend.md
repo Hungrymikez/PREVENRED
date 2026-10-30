@@ -149,11 +149,13 @@ Siguen las etapas de la especificación: levantamiento y arquitectura, Modo Coti
 ## 8. Accesibilidad y trabajo sin conexión
 
 - Referencia de accesibilidad: **WCAG 2.1 AA** (RNF-09): contraste suficiente, navegación por teclado, etiquetas en formularios, textos alternativos.
-- Enfoque **offline-first** (propuesta de implementación, a validar con el equipo):
-  - Convertir la app en **PWA** con _service worker_ para guardar la interfaz y datos básicos.
-  - Guardar los reportes en el dispositivo (IndexedDB) con un identificador generado localmente.
-  - Enviar la cola de reportes automáticamente al recuperar conexión, priorizando gravedad alta.
-  - Precargar capas del mapa y datos de la zona durante el uso cotidiano.
+- **Trabajo sin conexión** (CU-37, RNF-08). Implementado para los reportes de emergencia:
+  - **PWA**: `public/sw.js` guarda la app para que abra sin señal y `public/manifest.webmanifest` permite instalarla. Solo se activa en producción (`npm run build`); en `npm run dev` no.
+  - Sin señal, el reporte se guarda en el celular (**IndexedDB, cifrado con AES-GCM**) con un `clientId` único, para que el servidor nunca lo duplique (`src/offline/almacen.js`).
+  - Al volver la señal se envían solos, en orden, y se reintenta cada 30 s (`src/offline/sincronizar.js`). Si el servidor rechaza uno, queda marcado en _Mis casos_ para reintentar o descartar.
+  - Sin señal se usan el último usuario y el último modo conocidos, para poder reportar aunque la app abra sin conexión.
+  - **Pendiente**: guardar el mapa base para verlo sin señal (hoy sin red se ve vacío, pero el GPS y tocar el mapa siguen funcionando) y priorizar el envío por gravedad.
+  - **Para probarlo**: `npm run build` y `npm run preview`, luego en Chrome DevTools → _Network_ → _Offline_.
 
 ## 9. Convenciones de trabajo
 
