@@ -3,11 +3,30 @@ import { iniciarSesion as loginApi, obtenerUsuarioActual } from '@/api/auth'
 import { api, TOKEN_KEY } from '@/api/client'
 import { AuthContext } from '@/context/auth-context'
 
-function leerToken() {
+// Datos públicos del último usuario (los de /auth/me), para abrir la app sin conexión.
+const USUARIO_KEY = 'prevenred_usuario'
+
+function leer(clave) {
   try {
-    return localStorage.getItem(TOKEN_KEY)
+    return localStorage.getItem(clave)
   } catch {
     return null
+  }
+}
+
+function leerUsuarioGuardado() {
+  try {
+    return JSON.parse(leer(USUARIO_KEY))
+  } catch {
+    return null
+  }
+}
+
+function recordarUsuario(datos) {
+  try {
+    localStorage.setItem(USUARIO_KEY, JSON.stringify(datos))
+  } catch {
+    // Sin almacenamiento: solo se pierde poder abrir la app sin conexión.
   }
 }
 
@@ -18,22 +37,33 @@ function leerToken() {
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null)
   // Mientras se verifica el token guardado no sabemos si hay sesión: las rutas esperan.
-  const [verificando, setVerificando] = useState(() => Boolean(leerToken()))
+  const [verificando, setVerificando] = useState(() => Boolean(leer(TOKEN_KEY)))
 
   const cerrarSesion = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(USUARIO_KEY)
     setUsuario(null)
   }, [])
 
   useEffect(() => {
-    if (!leerToken()) return
+    if (!leer(TOKEN_KEY)) return
     obtenerUsuarioActual()
-      .then(setUsuario)
-      .catch(cerrarSesion)
+      .then((datos) => {
+        recordarUsuario(datos)
+        setUsuario(datos)
+      })
+      .catch((error) => {
+        // Sin red no se cierra la sesión: se usa el último usuario conocido para poder
+        // reportar sin conexión (CU-37). Si el servidor rechaza el token, sí se cierra.
+        const guardado = leerUsuarioGuardado()
+        if (!error?.response && guardado) setUsuario(guardado)
+        else cerrarSesion()
+      })
       .finally(() => setVerificando(false))
   }, [cerrarSesion])
 
   // Si el backend responde 401 (token vencido o inválido), se cierra la sesión.
+  // Los reportes guardados sin conexión se conservan (CU-37 E3).
   useEffect(() => {
     const id = api.interceptors.response.use(undefined, (error) => {
       const esLogin = error.config?.url?.includes('/auth/login')
@@ -47,6 +77,7 @@ export function AuthProvider({ children }) {
     const { access_token } = await loginApi(email, password)
     localStorage.setItem(TOKEN_KEY, access_token)
     const datos = await obtenerUsuarioActual()
+    recordarUsuario(datos)
     setUsuario(datos)
     return datos
   }, [])

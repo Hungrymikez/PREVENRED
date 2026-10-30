@@ -5,23 +5,31 @@ import { LayoutAuth } from '@/layouts/LayoutAuth'
 import { LayoutPrincipal } from '@/layouts/LayoutPrincipal'
 import Inicio from '@/pages/Inicio'
 import { NoEncontrado, SinPermiso } from '@/pages/PaginaMensaje'
+import {
+  cargarDetalleCaso,
+  cargarEmergencia,
+  cargarMisCasos,
+  cargarPanel,
+  cargarReportar,
+} from '@/routes/paginas'
 import { RutaEmergencia } from '@/routes/RutaEmergencia'
 import { RutaProtegida, RutaPublica } from '@/routes/RutaProtegida'
 
 // Cada página se descarga solo cuando se visita (la app abre más rápido, sobre todo en celular).
 const Login = lazy(() => import('@/pages/auth/Login'))
 const Registro = lazy(() => import('@/pages/auth/Registro'))
-const Panel = lazy(() => import('@/pages/Panel'))
+const Panel = lazy(cargarPanel)
 const SegundaVida = lazy(() => import('@/pages/segundavida/SegundaVida'))
 const DetallePublicacion = lazy(() => import('@/pages/segundavida/DetallePublicacion'))
 const Publicar = lazy(() => import('@/pages/segundavida/Publicar'))
 const OficiosYa = lazy(() => import('@/pages/oficiosya/OficiosYa'))
 const PerfilTecnico = lazy(() => import('@/pages/oficiosya/PerfilTecnico'))
 const MenteResiliente = lazy(() => import('@/pages/menteresiliente/MenteResiliente'))
-const Emergencia = lazy(() => import('@/pages/emergencia/Emergencia'))
-const Reportar = lazy(() => import('@/pages/emergencia/Reportar'))
-const MisCasos = lazy(() => import('@/pages/emergencia/MisCasos'))
-const DetalleCaso = lazy(() => import('@/pages/emergencia/DetalleCaso'))
+// Las de emergencia se precargan para que funcionen sin conexión (ver routes/paginas.js).
+const Emergencia = lazy(cargarEmergencia)
+const Reportar = lazy(cargarReportar)
+const MisCasos = lazy(cargarMisCasos)
+const DetalleCaso = lazy(cargarDetalleCaso)
 
 export default function App() {
   return (
