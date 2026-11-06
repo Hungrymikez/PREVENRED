@@ -98,21 +98,39 @@ const misCasos = [
 
 let consecutivo = 57
 
-/** Envía un reporte y devuelve el caso creado, con su número de seguimiento. */
-export function crearReporte({ categoria, type, description, quantity, coordenadas }) {
-  // Versión real: api.post('/incidents', ...) o api.post('/aid-needs', ...) según la categoría,
-  // con un clientId para no duplicar si se reintenta sin conexión (CU-37).
+/**
+ * Envía un reporte y devuelve el caso creado, con su número de seguimiento.
+ * `clientId` y `reportedAt` llegan cuando el reporte se hizo sin conexión (CU-37).
+ */
+export async function crearReporte({
+  categoria,
+  type,
+  description,
+  quantity,
+  coordenadas,
+  clientId = crypto.randomUUID(),
+  reportedAt = new Date().toISOString(),
+}) {
+  // Versión real: api.post('/incidents', ...) o api.post('/aid-needs', ...) según la categoría.
+  // Igual que una petición real, falla si no hay conexión (sin "response", como axios).
+  if (!navigator.onLine) throw new Error('Network Error')
+
+  // El servidor hace upsert por clientId: un reintento devuelve el mismo caso (H-07).
+  const existente = misCasos.find((c) => c.clientId === clientId)
+  if (existente) return simularRed(existente, 300)
+
   consecutivo += 1
   const ahora = new Date().toISOString()
   const caso = {
     caseId: `PR-2026-${String(consecutivo).padStart(5, '0')}`,
+    clientId,
     categoria,
     type,
     description: description?.trim() ?? '',
     quantity: categoria === 'ayuda' ? Number(quantity) : null,
     coordenadas,
     status: 'REPORTADO',
-    reportedAt: ahora,
+    reportedAt, // hora en que se hizo el reporte, aunque llegue después
     historial: [{ toStatus: 'REPORTADO', changedAt: ahora }],
   }
   misCasos.unshift(caso)

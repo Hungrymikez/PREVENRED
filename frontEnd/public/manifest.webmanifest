@@ -1,0 +1,11 @@
+{
+  "name": "PrevenRed Pereira",
+  "short_name": "PrevenRed",
+  "description": "Resiliencia urbana, economía colaborativa y bienestar comunitario para Pereira.",
+  "lang": "es-CO",
+  "start_url": "/panel",
+  "display": "standalone",
+  "background_color": "#eff6ff",
+  "theme_color": "#1d4ed8",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
