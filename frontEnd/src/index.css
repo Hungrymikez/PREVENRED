@@ -1,0 +1,14 @@
+@import 'tailwindcss';
+
+/* Colores de marca de PrevenRed. Se usan como clases: bg-marca-600, text-alerta-600, etc. */
+@theme {
+  --color-marca-50: #eff6ff;
+  --color-marca-100: #dbeafe;
+  --color-marca-600: #1d4ed8;
+  --color-marca-700: #1e40af;
+  --color-marca-900: #1e3a8a;
+
+  --color-alerta-50: #fef2f2;
+  --color-alerta-600: #dc2626;
+  --color-alerta-700: #b91c1c;
+}
