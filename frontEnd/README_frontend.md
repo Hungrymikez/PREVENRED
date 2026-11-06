@@ -133,10 +133,12 @@ Siguen las etapas de la especificación: levantamiento y arquitectura, Modo Coti
 
 **Etapa 3 · Modo Emergencia**
 
-- [ ] Indicador visible del modo activo y reconfiguración de la interfaz (RF-02)
-- [ ] Formulario de reporte: ubicación, foto y descripción (RF-23)
+> Base hecha con **datos de prueba** (`src/api/modo.js`, `src/api/incidentes.js`). En `npm run dev` aparece el botón "Demo: activar emergencia" para probar los dos modos.
+
+- [x] Indicador visible del modo activo y reconfiguración de la interfaz (RF-02) _(datos de prueba)_
+- [x] Formulario de reporte en 3 pasos: daño en vivienda, vía bloqueada y pedir ayuda, con ubicación por GPS o mapa, foto y descripción (RF-23) _(datos de prueba; la foto aún no se sube)_
 - [ ] Mapa multicapa con Leaflet (RF-19, RF-25)
-- [ ] Seguimiento del caso por identificador único (RF-22) y estados: Reportado, En revisión, Asignado, En atención, Resuelto (RF-24)
+- [x] Seguimiento del caso por identificador único (RF-22) y estados: Reportado, En revisión, Asignado, En atención, Resuelto (RF-24)
 - [ ] Tablero del coordinador: validar, priorizar, asignar recursos, técnicos y voluntarios (RF-27, RF-28)
 
 **Etapa 4 · Pruebas y simulacro**
