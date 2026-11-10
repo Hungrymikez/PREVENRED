@@ -23,5 +23,6 @@ class IncidentRepository(ABC):
         self,
         status: IncidentStatus | None = None,
         limit: int = 50,
+        reported_by: str | None = None,
     ) -> list[Incident]:
-        """Lista recientes, opcionalmente filtrados por estado."""
+        """Lista recientes, opcionalmente filtrados por estado y por quién reportó."""

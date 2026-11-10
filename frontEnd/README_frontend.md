@@ -152,6 +152,7 @@ Siguen las etapas de la especificación: levantamiento y arquitectura, Modo Coti
 - **Trabajo sin conexión** (CU-37, RNF-08). Implementado para los reportes de emergencia:
   - **PWA**: `public/sw.js` guarda la app para que abra sin señal y `public/manifest.webmanifest` permite instalarla. Solo se activa en producción (`npm run build`); en `npm run dev` no.
   - Sin señal, el reporte se guarda en el celular (**IndexedDB, cifrado con AES-GCM**) con un `clientId` único, para que el servidor nunca lo duplique (`src/offline/almacen.js`).
+  - Cada reporte guardado es de quien lo hizo: se cifra con una clave propia de esa cuenta y solo esa persona lo ve y lo envía. En un celular compartido, quien entre después no ve ni envía los reportes de otro; quedan en el dispositivo hasta que su dueño vuelva a entrar. Al cerrar sesión también se borra la caché de datos.
   - Al volver la señal se envían solos, en orden, y se reintenta cada 30 s (`src/offline/sincronizar.js`). Si el servidor rechaza uno, queda marcado en _Mis casos_ para reintentar o descartar.
   - Sin señal se usan el último usuario y el último modo conocidos, para poder reportar aunque la app abra sin conexión.
   - **Pendiente**: guardar el mapa base para verlo sin señal (hoy sin red se ve vacío, pero el GPS y tocar el mapa siguen funcionando) y priorizar el envío por gravedad.

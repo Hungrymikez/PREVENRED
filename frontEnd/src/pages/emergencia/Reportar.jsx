@@ -10,6 +10,7 @@ import { Boton } from '@/components/ui/Boton'
 import { Campo } from '@/components/ui/Campo'
 import { SinResultados } from '@/components/ui/Estados'
 import { Volver } from '@/components/ui/Volver'
+import { useAuth } from '@/hooks/useAuth'
 import { guardarPendiente, hayEspacio } from '@/offline/almacen'
 
 const TAMANO_MAXIMO_FOTO_MB = 10
@@ -19,9 +20,10 @@ const TIPOS_QUE_EXIGEN_DESCRIPCION = ['OTRO_DANO', 'OTRO_INCIDENTE', 'OTRA_NECES
 /**
  * Con señal envía el reporte; sin señal (o si la red falla al enviar) lo guarda cifrado
  * en el celular para enviarlo solo después (CU-29 A1, CU-30 A1, CU-31 A1, CU-37).
+ * Lo guardado queda a nombre de `usuarioId`: solo esa persona lo ve y lo envía.
  * Devuelve { caso } si llegó al servidor o { pendiente } si quedó guardado.
  */
-async function enviarOGuardar(reporte) {
+async function enviarOGuardar(reporte, usuarioId) {
   if (navigator.onLine) {
     try {
       return { caso: await crearReporte(reporte) }
@@ -35,7 +37,7 @@ async function enviarOGuardar(reporte) {
       paraMostrar: true,
     })
   }
-  return { pendiente: await guardarPendiente(reporte) }
+  return { pendiente: await guardarPendiente(reporte, usuarioId) }
 }
 
 /** CU-29, CU-30 y CU-31: reporte en 3 pasos (RNF-10). */
@@ -43,6 +45,7 @@ export default function Reportar() {
   const { categoria } = useParams()
   const config = CATEGORIAS_REPORTE[categoria]
   const queryClient = useQueryClient()
+  const usuarioId = useAuth().usuario?.id
 
   const [paso, setPaso] = useState(0)
   const [datos, setDatos] = useState({
@@ -56,7 +59,7 @@ export default function Reportar() {
 
   const envio = useMutation({
     networkMode: 'always', // sin conexión igual se ejecuta: el reporte se guarda en el celular
-    mutationFn: () => enviarOGuardar({ categoria, ...datos }),
+    mutationFn: () => enviarOGuardar({ categoria, ...datos }, usuarioId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mis-casos'] })
       queryClient.invalidateQueries({ queryKey: ['pendientes'] })

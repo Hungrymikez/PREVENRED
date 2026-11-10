@@ -51,6 +51,9 @@ class AsyncCollection:
     async def update_one(self, *args, **kwargs):
         return self._col.update_one(*args, **kwargs)
 
+    async def update_many(self, *args, **kwargs):
+        return self._col.update_many(*args, **kwargs)
+
     async def count_documents(self, *args, **kwargs):
         return self._col.count_documents(*args, **kwargs)
 

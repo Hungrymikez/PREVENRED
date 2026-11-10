@@ -40,10 +40,12 @@ class InMemoryIncidentRepository(IncidentRepository):
     def get_by_id(self, incident_id: str) -> Incident | None:
         return self.items.get(incident_id)
 
-    def list_recent(self, status=None, limit=50) -> list[Incident]:
+    def list_recent(self, status=None, limit=50, reported_by=None) -> list[Incident]:
         res = list(self.items.values())
         if status:
             res = [i for i in res if i.status == status]
+        if reported_by is not None:
+            res = [i for i in res if i.reported_by == reported_by]
         return res[:limit]
 
 
@@ -218,9 +220,9 @@ def test_api_report_and_list_as_citizen(client) -> None:
     assert data["case_number"].startswith("INC-")
     assert data["status"] == "REPORTADO"
 
-    listed = client.get("/api/v1/incidents/")
+    listed = client.get("/api/v1/incidents/", headers={"Authorization": f"Bearer {token}"})
     assert listed.status_code == 200
-    assert len(listed.json()) >= 1
+    assert [i["id"] for i in listed.json()] == [data["id"]]
 
 
 def test_api_consecutive_incident_reports_generate_unique_case_numbers(client) -> None:
@@ -293,3 +295,44 @@ def test_api_update_status_as_inspector(client) -> None:
     )
     assert updated.status_code == 200
     assert updated.json()["status"] == "EN_ATENCION"
+
+
+def _report(client, jwt: str, description: str) -> dict:
+    response = client.post(
+        "/api/v1/incidents/",
+        headers={"Authorization": f"Bearer {jwt}"},
+        json={
+            "incident_type": "INUNDACION",
+            "severity": "MEDIA",
+            "description": description,
+            "longitude": -75.69,
+            "latitude": 4.81,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_api_list_requires_auth(client) -> None:
+    """Los reportes llevan datos personales: sin sesión no se listan."""
+    assert client.get("/api/v1/incidents/").status_code == 401
+
+
+def test_api_citizen_only_lists_own_incidents_and_staff_lists_all(client) -> None:
+    tokens = JwtTokenService(get_settings())
+    ana = tokens.issue(new_id(), Role.CIUDADANO)
+    beto = tokens.issue(new_id(), Role.CIUDADANO)
+    inspector = tokens.issue(new_id(), Role.INSPECTOR)
+    admin = tokens.issue(new_id(), Role.ADMINISTRADOR)
+
+    de_ana = _report(client, ana, "Agua entrando a la casa de Ana")
+    de_beto = _report(client, beto, "Agua entrando a la casa de Beto")
+
+    def ids(jwt: str) -> set[str]:
+        response = client.get("/api/v1/incidents/", headers={"Authorization": f"Bearer {jwt}"})
+        assert response.status_code == 200
+        return {i["id"] for i in response.json()}
+
+    assert ids(ana) == {de_ana["id"]}
+    assert ids(beto) == {de_beto["id"]}
+    assert ids(inspector) == ids(admin) == {de_ana["id"], de_beto["id"]}

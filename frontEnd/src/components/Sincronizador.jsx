@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { CloudOff, RefreshCw, TriangleAlert } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router'
+import { useAuth } from '@/hooks/useAuth'
 import { useConexion } from '@/hooks/useConexion'
 import { usePendientes } from '@/hooks/usePendientes'
 import { sincronizarPendientes } from '@/offline/sincronizar'
@@ -15,21 +16,28 @@ const REINTENTO_MS = 30_000
 export function Sincronizador() {
   const enLinea = useConexion()
   const queryClient = useQueryClient()
+  const usuarioId = useAuth().usuario?.id
+  // Siempre el usuario actual, para cortar un envío en curso si la sesión cambia.
+  const usuarioActual = useRef(usuarioId)
+  useEffect(() => {
+    usuarioActual.current = usuarioId
+  }, [usuarioId])
   const { data: pendientes = [] } = usePendientes()
   const porEnviar = pendientes.filter((p) => p.estado === 'pendiente').length
   const conError = pendientes.length - porEnviar
 
   useEffect(() => {
-    if (!enLinea || porEnviar === 0) return undefined
+    if (!enLinea || !usuarioId || porEnviar === 0) return undefined
+    const sigueActivo = () => usuarioActual.current === usuarioId
     const sincronizar = () =>
-      sincronizarPendientes().then(() => {
+      sincronizarPendientes(usuarioId, { sigueActivo }).then(() => {
         queryClient.invalidateQueries({ queryKey: ['pendientes'] })
         queryClient.invalidateQueries({ queryKey: ['mis-casos'] })
       })
     sincronizar()
     const id = setInterval(sincronizar, REINTENTO_MS)
     return () => clearInterval(id)
-  }, [enLinea, porEnviar, queryClient])
+  }, [enLinea, usuarioId, porEnviar, queryClient])
 
   if (!enLinea) {
     return (
