@@ -126,7 +126,7 @@ Siguen las etapas de la especificación: levantamiento y arquitectura, Modo Coti
 
 > Las pantallas de esta etapa ya existen con **datos de prueba** (`src/api/mocks/`). Cuando el backend publique los endpoints, solo cambian las funciones de `src/api/segundavida.js`, `oficiosya.js` y `bienestar.js`.
 
-- [x] SegundaVida: publicar, buscar, filtrar, intercambio, venta y alquiler _(datos de prueba; faltan fotos y solicitud de alquiler)_
+- [x] SegundaVida: publicar, buscar, filtrar, intercambio, venta y alquiler con hasta 5 fotos por publicación _(datos de prueba: las fotos se ven solo en este navegador; falta subirlas con `/media/upload` y la solicitud de alquiler)_
 - [x] OficiosYa: filtro por especialidad, zona, disponibilidad y valoración; lista y mapa; contacto por enlace autorizado de WhatsApp _(datos de prueba)_
 - [ ] OficiosYa: calificar al técnico (RF-09) y pedir cotización (CU-20)
 - [x] Mente Resiliente: consentimiento, registro anónimo de ánimo y líneas de apoyo _(datos de prueba; falta el número oficial de la línea)_

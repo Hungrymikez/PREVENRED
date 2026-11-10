@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { MapPin } from 'lucide-react'
+import { useState } from 'react'
 import { useParams } from 'react-router'
 import { Circle } from 'react-leaflet'
 import { CONDICIONES, MODALIDADES, obtenerPublicacion } from '@/api/segundavida'
@@ -36,7 +37,7 @@ export default function DetallePublicacion() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-2">
             <div>
-              <IconoCategoria categoria={p.category} className="h-56" />
+              <Galeria publicacion={p} />
               <div className="mt-4 flex flex-wrap gap-1">
                 <Etiqueta color="azul">{MODALIDADES[p.offerType].nombre}</Etiqueta>
                 <Etiqueta>{p.category}</Etiqueta>
@@ -82,5 +83,39 @@ export default function DetallePublicacion() {
         )}
       </div>
     </>
+  )
+}
+
+/** Foto grande con miniaturas para cambiarla; sin fotos, el ícono de la categoría. */
+function Galeria({ publicacion: p }) {
+  const [elegida, setElegida] = useState(0)
+  const fotos = p.mediaUrls ?? []
+  if (!fotos.length) return <IconoCategoria categoria={p.category} className="h-56" />
+
+  return (
+    <div>
+      <img
+        src={fotos[elegida]}
+        alt={`Foto ${elegida + 1} de ${p.title}`}
+        className="h-72 w-full rounded-lg bg-slate-100 object-contain"
+      />
+      {fotos.length > 1 && (
+        <ul className="mt-2 flex gap-2 overflow-x-auto">
+          {fotos.map((url, i) => (
+            <li key={url} className="shrink-0">
+              <button
+                type="button"
+                onClick={() => setElegida(i)}
+                aria-label={`Ver foto ${i + 1}`}
+                aria-pressed={i === elegida}
+                className="block rounded-md ring-offset-2 aria-pressed:ring-2 aria-pressed:ring-marca-600"
+              >
+                <img src={url} alt="" className="size-16 rounded-md object-cover" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }

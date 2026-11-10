@@ -62,10 +62,15 @@ export async function obtenerPublicacion(id) {
   return simularRed(conUbicacion(publicacion, CENTRO_PEREIRA))
 }
 
-/** CU-11. En la versión real se envían también las imágenes (CU-47). */
-export function publicar(datos, autor) {
+/**
+ * CU-11. `fotos` son los archivos elegidos (opcional). Con datos de prueba se muestran
+ * desde el navegador; en la versión real cada foto se sube con POST /media/upload (CU-47)
+ * y la publicación guarda sus URLs en `media_urls`.
+ */
+export function publicar(datos, autor, fotos = []) {
   const nueva = {
     ...datos,
+    mediaUrls: fotos.map((foto) => URL.createObjectURL(foto)),
     id: `m${Date.now()}`,
     tipo: datos.category === 'Herramientas' ? 'herramienta' : 'material',
     price: datos.offerType === 'INTERCAMBIO' ? 0 : Number(datos.price),

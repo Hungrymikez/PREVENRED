@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useNavigate } from 'react-router'
 import { CATEGORIAS, CONDICIONES, MODALIDADES, publicar } from '@/api/segundavida'
@@ -10,12 +11,14 @@ import { Volver } from '@/components/ui/Volver'
 import { useAuth } from '@/hooks/useAuth'
 import { NOMBRES_ZONAS } from '@/utils/zonas'
 import { esquemaPublicacion } from './esquema'
+import { SelectorFotos } from './SelectorFotos'
 
 /** CU-11 · Publicar material. */
 export default function Publicar() {
   const { usuario } = useAuth()
   const navegar = useNavigate()
   const queryClient = useQueryClient()
+  const [fotos, setFotos] = useState([])
 
   const {
     register,
@@ -39,7 +42,7 @@ export default function Publicar() {
   const modalidad = useWatch({ control, name: 'offerType' })
 
   const publicacion = useMutation({
-    mutationFn: (datos) => publicar(datos, usuario.full_name),
+    mutationFn: (datos) => publicar(datos, usuario.full_name, fotos),
     onSuccess: (nueva) => {
       queryClient.invalidateQueries({ queryKey: ['publicaciones'] }) // la lista se recarga
       navegar(`/segundavida/${nueva.id}`)
@@ -143,7 +146,7 @@ export default function Publicar() {
           </Campo>
         </div>
 
-        <Alerta tipo="info">Pronto podrás agregar fotos a tu publicación.</Alerta>
+        <SelectorFotos fotos={fotos} onCambiar={setFotos} />
 
         <Boton type="submit" cargando={publicacion.isPending} className="w-full">
           Publicar
