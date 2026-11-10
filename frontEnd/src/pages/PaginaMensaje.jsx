@@ -4,12 +4,12 @@ import { Link } from 'react-router'
 function PaginaMensaje({ codigo, titulo, texto }) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
-      <p className="text-sm font-semibold text-marca-600">{codigo}</p>
-      <h1 className="mt-2 text-3xl font-bold text-slate-900">{titulo}</h1>
-      <p className="mt-2 text-slate-600">{texto}</p>
+      <p className="text-sm font-semibold text-marca-600 dark:text-amber-400">{codigo}</p>
+      <h1 className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{titulo}</h1>
+      <p className="mt-2 text-slate-600 dark:text-slate-300">{texto}</p>
       <Link
         to="/"
-        className="mt-6 rounded-lg bg-marca-600 px-4 py-2.5 font-medium text-white hover:bg-marca-700"
+        className="mt-6 rounded-lg bg-marca-600 px-4 py-2.5 font-medium text-white hover:bg-marca-700 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400"
       >
         Volver al inicio
       </Link>

@@ -42,18 +42,20 @@ export default function DetallePublicacion() {
                 <Etiqueta>{p.category}</Etiqueta>
                 <Etiqueta>{CONDICIONES[p.condition]}</Etiqueta>
               </div>
-              <h1 className="mt-2 text-2xl font-bold text-slate-900">{p.title}</h1>
-              <p className="mt-1 text-2xl font-bold text-marca-700">{textoPrecio(p)}</p>
-              <p className="mt-4 text-slate-700">{p.description}</p>
+              <h1 className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{p.title}</h1>
+              <p className="mt-1 text-2xl font-bold text-marca-700 dark:text-amber-400">
+                {textoPrecio(p)}
+              </p>
+              <p className="mt-4 text-slate-700 dark:text-slate-200">{p.description}</p>
 
               <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <dt className="text-slate-500">Cantidad</dt>
-                  <dd className="font-medium text-slate-900">{p.quantity}</dd>
+                  <dt className="text-slate-500 dark:text-slate-400">Cantidad</dt>
+                  <dd className="font-medium text-slate-900 dark:text-white">{p.quantity}</dd>
                 </div>
                 <div>
-                  <dt className="text-slate-500">Publicado por</dt>
-                  <dd className="font-medium text-slate-900">{p.ownerName}</dd>
+                  <dt className="text-slate-500 dark:text-slate-400">Publicado por</dt>
+                  <dd className="font-medium text-slate-900 dark:text-white">{p.ownerName}</dd>
                 </div>
               </dl>
 
@@ -67,11 +69,11 @@ export default function DetallePublicacion() {
             </div>
 
             <div>
-              <h2 className="flex items-center gap-1 font-semibold text-slate-900">
+              <h2 className="flex items-center gap-1 font-semibold text-slate-900 dark:text-white">
                 <MapPin className="size-4" aria-hidden="true" />
                 {p.zona} · {formatearDistancia(p.distanciaKm)}
               </h2>
-              <p className="mb-2 text-sm text-slate-600">
+              <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
                 Ubicación aproximada: el barrio, nunca la dirección exacta.
               </p>
               <Mapa centro={p.coordenadas} zoom={14} className="h-72">

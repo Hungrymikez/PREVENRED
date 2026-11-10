@@ -21,7 +21,7 @@ export function SimuladorModo() {
       type="button"
       onClick={() => cambio.mutate()}
       disabled={cambio.isPending}
-      className="fixed right-3 bottom-20 z-20 rounded-full border border-dashed border-slate-400 bg-white/95 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-white md:bottom-4"
+      className="fixed right-3 bottom-20 z-20 rounded-full border border-dashed border-slate-400 bg-white/95 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-white md:bottom-4 dark:bg-slate-900/95 dark:text-slate-200 dark:hover:bg-slate-800"
     >
       Demo: {enEmergencia ? 'volver a Cotidiano' : 'activar emergencia'}
     </button>

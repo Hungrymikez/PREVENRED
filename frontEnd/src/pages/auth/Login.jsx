@@ -35,8 +35,10 @@ export default function Login() {
 
   return (
     <>
-      <h1 className="text-2xl font-bold text-slate-900">Inicia sesión</h1>
-      <p className="mt-1 text-sm text-slate-600">Bienvenido de nuevo a PrevenRed.</p>
+      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Inicia sesión</h1>
+      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+        Bienvenido de nuevo a PrevenRed.
+      </p>
 
       {ubicacion.state?.registrado && (
         <div className="mt-4">
@@ -67,9 +69,12 @@ export default function Login() {
         </Boton>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-600">
+      <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-300">
         ¿No tienes cuenta?{' '}
-        <Link to="/registro" className="font-medium text-marca-700 hover:underline">
+        <Link
+          to="/registro"
+          className="font-medium text-marca-700 hover:underline dark:text-amber-400"
+        >
           Regístrate
         </Link>
       </p>

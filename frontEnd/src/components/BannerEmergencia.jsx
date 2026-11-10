@@ -16,7 +16,7 @@ export function BannerEmergencia({ modo }) {
         </p>
         <Link
           to="/emergencia"
-          className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-alerta-700 hover:bg-alerta-50"
+          className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-alerta-700 hover:bg-alerta-50 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-950/50"
         >
           Reportar
         </Link>

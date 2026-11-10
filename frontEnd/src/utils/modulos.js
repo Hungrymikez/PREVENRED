@@ -1,23 +1,29 @@
 import { ClipboardList, HeartPulse, House, Recycle, Siren, Wrench } from 'lucide-react'
 
-/** Secciones del Modo Cotidiano. Las usan el menú y las tarjetas del panel. */
+/**
+ * Secciones del Modo Cotidiano. Las usan el menú y las tarjetas del panel.
+ * `tono` es el color propio de cada módulo en el panel (ver TONOS en Panel.jsx).
+ */
 export const MODULOS = [
   { ruta: '/panel', nombre: 'Inicio', Icono: House, exacta: true },
   {
     ruta: '/segundavida',
     nombre: 'SegundaVida',
+    tono: 'verde',
     descripcion: 'Compra, intercambia o alquila materiales y herramientas de tus vecinos.',
     Icono: Recycle,
   },
   {
     ruta: '/oficiosya',
     nombre: 'OficiosYa',
+    tono: 'naranja',
     descripcion: 'Encuentra técnicos verificados cerca de ti.',
     Icono: Wrench,
   },
   {
     ruta: '/mente-resiliente',
     nombre: 'Mente Resiliente',
+    tono: 'rosa',
     descripcion: 'Cuéntanos cómo estás y encuentra apoyo.',
     Icono: HeartPulse,
   },

@@ -30,8 +30,8 @@ export default function OficiosYa() {
 
   return (
     <>
-      <h1 className="text-2xl font-bold text-slate-900">OficiosYa Pereira</h1>
-      <p className="text-slate-600">Técnicos verificados cerca de ti.</p>
+      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">OficiosYa Pereira</h1>
+      <p className="text-slate-600 dark:text-slate-300">Técnicos verificados cerca de ti.</p>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Campo
@@ -76,10 +76,10 @@ export default function OficiosYa() {
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
           <input
             type="checkbox"
-            className="size-4 accent-marca-600"
+            className="size-4 accent-marca-600 dark:accent-amber-500"
             checked={filtros.soloDisponibles === 'si'}
             onChange={(e) => cambiar('soloDisponibles', e.target.checked && 'si')}
           />
@@ -127,10 +127,10 @@ function TarjetaTecnico({ tecnico: t }) {
   return (
     <Link
       to={`/oficiosya/${t.id}`}
-      className="flex h-full gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-marca-600 hover:shadow-sm"
+      className="flex h-full gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-marca-600 hover:shadow-sm dark:border-white/10 dark:bg-slate-900 dark:hover:border-amber-400"
     >
       <div
-        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-marca-100 font-bold text-marca-900"
+        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-marca-100 font-bold text-marca-900 dark:bg-amber-400/15 dark:text-amber-200"
         aria-hidden="true"
       >
         {t.fullName
@@ -139,9 +139,12 @@ function TarjetaTecnico({ tecnico: t }) {
           .join('')}
       </div>
       <div className="min-w-0">
-        <h2 className="flex items-center gap-1 font-semibold text-slate-900">
+        <h2 className="flex items-center gap-1 font-semibold text-slate-900 dark:text-white">
           {t.fullName}
-          <BadgeCheck className="size-4 text-marca-600" aria-label="Verificado" />
+          <BadgeCheck
+            className="size-4 text-marca-600 dark:text-amber-400"
+            aria-label="Verificado"
+          />
         </h2>
         <div className="mt-1 flex flex-wrap gap-1">
           {t.specialties.map((e) => (
@@ -152,7 +155,7 @@ function TarjetaTecnico({ tecnico: t }) {
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
           <Estrellas valor={t.rating} total={t.totalReviews} />
-          <span className="flex items-center gap-1 text-sm text-slate-600">
+          <span className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-300">
             <MapPin className="size-4" aria-hidden="true" />
             {t.zona}
           </span>

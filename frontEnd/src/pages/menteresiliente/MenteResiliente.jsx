@@ -21,8 +21,10 @@ export default function MenteResiliente() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Mente Resiliente</h1>
-        <p className="text-slate-600">Un espacio para contar cómo estás. Sin juicios.</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Mente Resiliente</h1>
+        <p className="text-slate-600 dark:text-slate-300">
+          Un espacio para contar cómo estás. Sin juicios.
+        </p>
       </div>
 
       {consentimiento ? (
@@ -41,24 +43,27 @@ function Consentimiento({ onAceptar }) {
   const aceptar = useMutation({ mutationFn: otorgarConsentimiento, onSuccess: onAceptar })
 
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-sm" aria-labelledby="titulo-consentimiento">
+    <section
+      className="rounded-2xl bg-white p-6 shadow-sm dark:bg-slate-900"
+      aria-labelledby="titulo-consentimiento"
+    >
       <h2
         id="titulo-consentimiento"
-        className="flex items-center gap-2 font-semibold text-slate-900"
+        className="flex items-center gap-2 font-semibold text-slate-900 dark:text-white"
       >
-        <ShieldCheck className="size-5 text-marca-600" aria-hidden="true" />
+        <ShieldCheck className="size-5 text-marca-600 dark:text-amber-400" aria-hidden="true" />
         Antes de empezar
       </h2>
-      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">
+      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-200">
         <li>Tu respuesta se analiza junto con la de otros vecinos, por barrio, y sin tu nombre.</li>
         <li>No es un diagnóstico ni una evaluación de tu salud.</li>
         <li>Estos datos nunca se usan con fines comerciales.</li>
         <li>Puedes dejar de participar cuando quieras.</li>
       </ul>
-      <label className="mt-4 flex items-start gap-2 text-sm text-slate-700">
+      <label className="mt-4 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
         <input
           type="checkbox"
-          className="mt-0.5 size-4 accent-marca-600"
+          className="mt-0.5 size-4 accent-marca-600 dark:accent-amber-500"
           checked={acepta}
           onChange={(e) => setAcepta(e.target.checked)}
         />
@@ -94,13 +99,15 @@ function RegistroBienestar() {
   if (envio.isSuccess) {
     const animoBajo = envio.variables.animo <= 2
     return (
-      <section className="rounded-2xl bg-white p-6 shadow-sm" role="status">
-        <h2 className="text-lg font-semibold text-slate-900">Gracias por contarnos cómo estás</h2>
-        <p className="mt-1 text-slate-700">
+      <section className="rounded-2xl bg-white p-6 shadow-sm dark:bg-slate-900" role="status">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+          Gracias por contarnos cómo estás
+        </h2>
+        <p className="mt-1 text-slate-700 dark:text-slate-200">
           Tu respuesta ayuda a entender cómo está tu barrio y a llevar apoyo donde más se necesita.
         </p>
         {animoBajo && (
-          <p className="mt-3 text-slate-700">
+          <p className="mt-3 text-slate-700 dark:text-slate-200">
             Si te está costando, no tienes que pasar por esto sin ayuda. Abajo encuentras a quién
             acudir.
           </p>
@@ -123,19 +130,21 @@ function RegistroBienestar() {
     <form
       onSubmit={handleSubmit((datos) => envio.mutate(datos))}
       noValidate
-      className="space-y-5 rounded-2xl bg-white p-6 shadow-sm"
+      className="space-y-5 rounded-2xl bg-white p-6 shadow-sm dark:bg-slate-900"
     >
       {envio.error && (
         <Alerta tipo="error">No se pudo enviar. Revisa tu conexión e intenta de nuevo.</Alerta>
       )}
 
       <fieldset>
-        <legend className="font-semibold text-slate-900">¿Cómo te sientes esta semana?</legend>
+        <legend className="font-semibold text-slate-900 dark:text-white">
+          ¿Cómo te sientes esta semana?
+        </legend>
         <div className="mt-3 grid grid-cols-5 gap-2">
           {NIVELES_ANIMO.map((nivel) => (
             <label
               key={nivel.valor}
-              className="flex cursor-pointer flex-col items-center gap-1 rounded-xl border border-slate-300 p-2 text-center has-checked:border-marca-600 has-checked:bg-marca-50 has-focus-visible:ring-2 has-focus-visible:ring-marca-600"
+              className="flex cursor-pointer flex-col items-center gap-1 rounded-xl border border-slate-300 p-2 text-center has-checked:border-marca-600 has-checked:bg-marca-50 has-focus-visible:ring-2 has-focus-visible:ring-marca-600 dark:border-white/20 dark:has-checked:border-amber-400 dark:has-checked:bg-amber-400/10 dark:has-focus-visible:ring-amber-400"
             >
               <input
                 type="radio"
@@ -146,11 +155,15 @@ function RegistroBienestar() {
               <span className="text-2xl" aria-hidden="true">
                 {nivel.emoji}
               </span>
-              <span className="text-xs font-medium text-slate-800">{nivel.nombre}</span>
+              <span className="text-xs font-medium text-slate-800 dark:text-slate-100">
+                {nivel.nombre}
+              </span>
             </label>
           ))}
         </div>
-        {errors.animo && <p className="mt-1 text-sm text-alerta-700">{errors.animo.message}</p>}
+        {errors.animo && (
+          <p className="mt-1 text-sm text-alerta-700 dark:text-red-300">{errors.animo.message}</p>
+        )}
       </fieldset>
 
       <Campo
@@ -174,10 +187,13 @@ function RegistroBienestar() {
 function ApoyoProfesional() {
   return (
     <section
-      className="rounded-2xl border border-marca-100 bg-marca-50 p-6"
+      className="rounded-2xl border border-marca-100 bg-marca-50 p-6 dark:bg-amber-400/10"
       aria-labelledby="titulo-apoyo"
     >
-      <h2 id="titulo-apoyo" className="flex items-center gap-2 font-semibold text-marca-900">
+      <h2
+        id="titulo-apoyo"
+        className="flex items-center gap-2 font-semibold text-marca-900 dark:text-amber-200"
+      >
         <HeartHandshake className="size-5" aria-hidden="true" />
         ¿Necesitas hablar con alguien ahora?
       </h2>
@@ -185,16 +201,16 @@ function ApoyoProfesional() {
         {LINEAS_DE_APOYO.map((linea) => (
           <li
             key={linea.nombre}
-            className="flex items-center justify-between gap-3 rounded-xl bg-white p-3"
+            className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 dark:bg-slate-900"
           >
             <div>
-              <p className="font-medium text-slate-900">{linea.nombre}</p>
-              <p className="text-sm text-slate-600">{linea.detalle}</p>
+              <p className="font-medium text-slate-900 dark:text-white">{linea.nombre}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-300">{linea.detalle}</p>
             </div>
             {linea.telefono && (
               <a
                 href={`tel:${linea.telefono}`}
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-marca-600 px-3 py-2 font-medium text-white hover:bg-marca-700"
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-marca-600 px-3 py-2 font-medium text-white hover:bg-marca-700 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400"
               >
                 <Phone className="size-4" aria-hidden="true" />
                 {linea.telefono}

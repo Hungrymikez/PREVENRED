@@ -33,7 +33,7 @@ export function Sincronizador() {
 
   if (!enLinea) {
     return (
-      <Aviso Icono={CloudOff} estilo="bg-amber-100 text-amber-950">
+      <Aviso Icono={CloudOff} estilo="bg-amber-100 dark:bg-amber-400/15 text-amber-950">
         <strong>Sin conexión.</strong> Tus reportes se guardan en este celular y se envían solos al
         volver la señal.
         {porEnviar > 0 && ` Pendientes: ${porEnviar}.`}
@@ -42,14 +42,21 @@ export function Sincronizador() {
   }
   if (porEnviar > 0) {
     return (
-      <Aviso Icono={RefreshCw} estilo="bg-marca-50 text-marca-900" girando>
+      <Aviso
+        Icono={RefreshCw}
+        estilo="bg-marca-50 dark:bg-amber-400/10 text-marca-900 dark:text-amber-200"
+        girando
+      >
         Enviando {porEnviar === 1 ? '1 reporte guardado' : `${porEnviar} reportes guardados`}…
       </Aviso>
     )
   }
   if (conError > 0) {
     return (
-      <Aviso Icono={TriangleAlert} estilo="bg-alerta-50 text-alerta-700">
+      <Aviso
+        Icono={TriangleAlert}
+        estilo="bg-alerta-50 dark:bg-red-950/50 text-alerta-700 dark:text-red-300"
+      >
         {conError === 1
           ? '1 reporte no se pudo enviar.'
           : `${conError} reportes no se pudieron enviar.`}{' '}

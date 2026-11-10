@@ -49,25 +49,29 @@ export default function Publicar() {
   return (
     <div className="mx-auto max-w-2xl">
       <Volver a="/segundavida">Volver a SegundaVida</Volver>
-      <h1 className="mt-4 text-2xl font-bold text-slate-900">Publicar en SegundaVida</h1>
-      <p className="mt-1 text-slate-600">
+      <h1 className="mt-4 text-2xl font-bold text-slate-900 dark:text-white">
+        Publicar en SegundaVida
+      </h1>
+      <p className="mt-1 text-slate-600 dark:text-slate-300">
         Dale una segunda vida a lo que te sobró. Solo mostramos tu barrio, nunca tu dirección.
       </p>
 
       <form
         onSubmit={handleSubmit((datos) => publicacion.mutate(datos))}
         noValidate
-        className="mt-6 space-y-4 rounded-2xl bg-white p-6 shadow-sm"
+        className="mt-6 space-y-4 rounded-2xl bg-white p-6 shadow-sm dark:bg-slate-900"
       >
         {publicacion.error && <Alerta tipo="error">{publicacion.error.message}</Alerta>}
 
         <fieldset>
-          <legend className="mb-2 text-sm font-medium text-slate-800">¿Qué quieres hacer?</legend>
+          <legend className="mb-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+            ¿Qué quieres hacer?
+          </legend>
           <div className="grid grid-cols-3 gap-2">
             {Object.entries(MODALIDADES).map(([valor, { nombre }]) => (
               <label
                 key={valor}
-                className="cursor-pointer rounded-lg border border-slate-300 p-2 text-center text-sm font-medium has-checked:border-marca-600 has-checked:bg-marca-50 has-focus-visible:ring-2 has-focus-visible:ring-marca-600"
+                className="cursor-pointer rounded-lg border border-slate-300 p-2 text-center text-sm font-medium has-checked:border-marca-600 has-checked:bg-marca-50 has-focus-visible:ring-2 has-focus-visible:ring-marca-600 dark:border-white/20 dark:has-checked:border-amber-400 dark:has-checked:bg-amber-400/10 dark:has-focus-visible:ring-amber-400"
               >
                 <input type="radio" value={valor} className="sr-only" {...register('offerType')} />
                 {nombre}

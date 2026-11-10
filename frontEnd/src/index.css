@@ -1,5 +1,11 @@
 @import 'tailwindcss';
 
+/*
+ * Tema oscuro. Las clases dark: se activan con data-tema="oscuro" en <html>
+ * (lo pone el hook useTema según lo que elija la persona).
+ */
+@custom-variant dark (&:where([data-tema='oscuro'], [data-tema='oscuro'] *));
+
 /* Colores de marca de PrevenRed. Se usan como clases: bg-marca-600, text-alerta-600, etc. */
 @theme {
   --color-marca-50: #eff6ff;
@@ -11,4 +17,10 @@
   --color-alerta-50: #fef2f2;
   --color-alerta-600: #dc2626;
   --color-alerta-700: #b91c1c;
+}
+
+/* Barras de desplazamiento, calendarios y demás controles del navegador en oscuro. */
+:root[data-tema='oscuro'] {
+  color-scheme: dark;
+  background-color: var(--color-slate-950);
 }
