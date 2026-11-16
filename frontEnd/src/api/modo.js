@@ -1,11 +1,9 @@
 /**
  * Modo operacional global: Cotidiano o Emergencia (CU-04, RF-01, RF-02).
- * DATOS DE PRUEBA: la versión real lo consulta al backend (ej.: api.get('/operating-mode')).
- * Solo un Administrador cambia el modo; aquí se puede simular en desarrollo.
+ * Se consulta al backend (GET /mode/current, público) y solo un Administrador lo cambia
+ * (POST /mode/switch, RN-01). El backend guarda el historial de cambios (RN-02).
  */
-import { simularRed } from '@/api/mocks/simular'
-
-const CLAVE_DEMO = 'prevenred_modo_demo'
+import { api } from '@/api/client'
 
 export const TIPOS_EVENTO = {
   SISMO: 'Sismo',
@@ -13,34 +11,21 @@ export const TIPOS_EVENTO = {
   DESLIZAMIENTO: 'Deslizamiento',
 }
 
-const COTIDIANO = { mode: 'COTIDIANO' }
-
-function leer() {
-  try {
-    return JSON.parse(localStorage.getItem(CLAVE_DEMO)) ?? COTIDIANO
-  } catch {
-    return COTIDIANO
-  }
+/** Respuesta del backend -> forma que usa la app ({ mode, reason, startedAt }). */
+function aModo(data) {
+  return { mode: data.mode, reason: data.reason, startedAt: data.created_at }
 }
 
-export function obtenerModo() {
-  return simularRed(leer(), 200)
+export async function obtenerModo() {
+  const { data } = await api.get('/mode/current')
+  return aModo(data)
 }
 
-/** SOLO PARA DEMOSTRACIÓN. En la versión real lo hace el Administrador con MFA (CU-04). */
-export function simularCambioDeModo(activarEmergencia) {
-  const modo = activarEmergencia
-    ? {
-        mode: 'EMERGENCIA',
-        eventType: 'SISMO',
-        reason: 'Sismo de magnitud 5,8 sentido en Pereira. Reporta daños y pide ayuda aquí.',
-        startedAt: new Date().toISOString(),
-      }
-    : COTIDIANO
-  try {
-    localStorage.setItem(CLAVE_DEMO, JSON.stringify(modo))
-  } catch {
-    // Sin almacenamiento: el cambio no se conserva al recargar.
-  }
-  return simularRed(modo, 200)
+/** CU-04. `motivo` es obligatorio (mínimo 10 caracteres) y queda en el historial. */
+export async function cambiarModo({ activarEmergencia, motivo }) {
+  const { data } = await api.post('/mode/switch', {
+    new_mode: activarEmergencia ? 'EMERGENCIA' : 'COTIDIANO',
+    reason: motivo,
+  })
+  return aModo(data)
 }

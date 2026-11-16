@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { publicar } from '@/api/segundavida'
 import { SelectorFotos } from './SelectorFotos'
 
 const foto = (nombre, tipo = 'image/jpeg') => new File(['bytes'], nombre, { type: tipo })
@@ -50,26 +49,5 @@ describe('SelectorFotos (CU-11 con CU-47)', () => {
     )
     expect(screen.getByRole('alert')).toHaveTextContent('JPG, PNG o WEBP')
     expect(screen.queryAllByRole('img')).toHaveLength(0)
-  })
-
-  it('la publicación guarda una URL por cada foto', async () => {
-    vi.useFakeTimers()
-    const promesa = publicar(
-      {
-        offerType: 'VENTA',
-        title: 'Tejas',
-        description: 'Tejas de zinc en buen estado',
-        category: 'Construcción',
-        condition: 'buen_estado',
-        quantity: 2,
-        price: 1000,
-        zona: 'Cuba',
-      },
-      'Sara Salas',
-      [foto('a.jpg'), foto('b.jpg')],
-    )
-    await vi.runAllTimersAsync()
-    expect((await promesa).mediaUrls).toEqual(['blob:prueba-1', 'blob:prueba-2'])
-    vi.useRealTimers()
   })
 })

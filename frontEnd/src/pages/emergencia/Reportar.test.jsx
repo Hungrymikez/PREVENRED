@@ -1,8 +1,14 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
+import { api } from '@/api/client'
 import { renderConApp, USUARIO_PRUEBA } from '@/test/utils'
 import Reportar from './Reportar'
+
+vi.mock('@/api/client', async (original) => ({
+  ...(await original()),
+  api: { get: vi.fn(), post: vi.fn() },
+}))
 
 // El mapa real (Leaflet) no funciona en el navegador simulado: se reemplaza por un botón.
 vi.mock('@/components/mapa/SelectorUbicacion', () => ({
@@ -29,6 +35,20 @@ const siguiente = () => userEvent.click(screen.getByRole('button', { name: 'Sigu
 
 describe('Reportar (CU-30)', () => {
   it('reporta un deslizamiento en 3 pasos y entrega el número de caso', async () => {
+    api.post.mockResolvedValue({
+      data: {
+        id: 'i1',
+        case_number: 'INC-20261116-ABC123',
+        incident_type: 'DESLIZAMIENTO',
+        status: 'REPORTADO',
+        description: 'Deslizamiento',
+        longitude: -75.67,
+        latitude: 4.82,
+        created_at: '2026-11-16T10:00:00Z',
+        reported_at: '2026-11-16T10:00:00Z',
+        history: [],
+      },
+    })
     abrir('via')
 
     await siguiente()
@@ -45,7 +65,15 @@ describe('Reportar (CU-30)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Enviar reporte' }))
 
     expect(await screen.findByText('Reporte enviado')).toBeInTheDocument()
-    expect(screen.getByText(/^PR-2026-\d{5}$/)).toBeInTheDocument()
+    expect(screen.getByText('INC-20261116-ABC123')).toBeInTheDocument()
+    expect(api.post).toHaveBeenCalledWith(
+      '/incidents/',
+      expect.objectContaining({
+        incident_type: 'DESLIZAMIENTO',
+        latitude: 4.82,
+        longitude: -75.67,
+      }),
+    )
   })
 
   it('pide descripción cuando el tipo es "otro"', async () => {

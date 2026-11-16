@@ -8,7 +8,8 @@ export function Portada({ publicacion: p, className = 'h-32' }) {
     <img
       src={foto}
       alt={`Foto de ${p.title}`}
-      className={`w-full rounded-lg bg-slate-100 object-cover ${className}`}
+      loading="lazy"
+      className={`w-full rounded-lg bg-slate-100 object-cover dark:bg-slate-800 ${className}`}
     />
   )
 }

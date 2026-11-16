@@ -33,7 +33,7 @@ export function Campo({
         ref={ref}
         aria-invalid={error ? 'true' : 'false'}
         aria-describedby={error || ayuda ? idMensaje : undefined}
-        className={`block w-full rounded-lg border bg-white px-3 py-2.5 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:outline-none dark:bg-white/10 dark:text-white dark:[color-scheme:dark] dark:placeholder:text-slate-400 ${
+        className={`block w-full rounded-lg border bg-white px-3 py-2.5 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:outline-none dark:bg-white/10 dark:text-white dark:[color-scheme:dark] dark:placeholder:text-slate-400 [&_option]:bg-white [&_option]:text-slate-900 dark:[&_option]:bg-slate-800 dark:[&_option]:text-white ${
           error
             ? 'border-alerta-600 focus:ring-alerta-600 dark:border-red-400 dark:focus:ring-red-400'
             : 'border-slate-300 focus:border-marca-600 focus:ring-marca-600 dark:border-white/20 dark:focus:border-amber-400 dark:focus:ring-amber-400'

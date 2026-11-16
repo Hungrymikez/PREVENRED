@@ -17,6 +17,8 @@ export default defineConfig({
     // Así el navegador no bloquea las peticiones por CORS.
     proxy: {
       '/api': 'http://localhost:8000',
+      // Fotos y videos subidos (CU-47): el backend los sirve en /static/uploads/...
+      '/static': 'http://localhost:8000',
     },
   },
   // Pruebas (npm test): simulan un navegador con jsdom.

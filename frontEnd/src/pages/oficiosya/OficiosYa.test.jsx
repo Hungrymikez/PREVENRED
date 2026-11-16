@@ -1,19 +1,47 @@
-import { screen, waitForElementToBeRemoved } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { listarTecnicos } from '@/api/oficiosya'
 import { renderConApp, USUARIO_PRUEBA } from '@/test/utils'
 import OficiosYa from './OficiosYa'
 
-describe('OficiosYa', () => {
-  it('lista técnicos verificados y filtra por especialidad', async () => {
+vi.mock('@/api/oficiosya', async (original) => ({
+  ...(await original()),
+  listarTecnicos: vi.fn(),
+}))
+
+const TECNICO = {
+  id: 't1',
+  full_name: 'Carlos Arango',
+  specialties: ['PLOMERIA', 'ELECTRICIDAD'],
+  experience_years: 5,
+  bio: '',
+  verification_status: 'VERIFICADO',
+  rating_average: 4.5,
+  reviews_count: 2,
+  coordenadas: [4.796, -75.731],
+  zona: 'Cuba',
+}
+
+describe('OficiosYa (CU-19)', () => {
+  beforeEach(() => listarTecnicos.mockReset())
+
+  it('muestra los técnicos del backend con sus oficios y barrio aproximado', async () => {
+    listarTecnicos.mockResolvedValue([TECNICO])
     renderConApp(<OficiosYa />, { auth: { usuario: USUARIO_PRUEBA }, ruta: '/oficiosya' })
 
-    expect(await screen.findByText('Carlos Arango')).toBeInTheDocument()
-    expect(screen.queryByText('Julián Ospina')).not.toBeInTheDocument() // pendiente de verificación
+    const tarjeta = (await screen.findByText('Carlos Arango')).closest('a')
+    expect(tarjeta).toHaveAttribute('href', '/oficiosya/t1')
+    expect(within(tarjeta).getByText('Plomería')).toBeInTheDocument()
+    expect(within(tarjeta).getByText('Electricidad')).toBeInTheDocument()
+    expect(within(tarjeta).getByText('Cerca de Cuba')).toBeInTheDocument()
+  })
+
+  it('pide al backend la especialidad elegida (código del enum)', async () => {
+    listarTecnicos.mockResolvedValue([])
+    renderConApp(<OficiosYa />, { auth: { usuario: USUARIO_PRUEBA }, ruta: '/oficiosya' })
+    await screen.findByText('Sin resultados')
 
     await userEvent.selectOptions(screen.getByLabelText('Especialidad'), 'Pintura')
-
-    // Mientras llega el filtro se ven los resultados anteriores: esperamos a que se actualice.
-    await waitForElementToBeRemoved(() => screen.queryByText('Carlos Arango'))
-    expect(screen.getByText('Natalia Gómez')).toBeInTheDocument()
+    expect(listarTecnicos).toHaveBeenLastCalledWith({ especialidad: 'PINTURA' })
   })
 })

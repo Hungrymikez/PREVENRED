@@ -1,13 +1,15 @@
-import { ArrowRight, ClipboardList, MapPin, Siren } from 'lucide-react'
+import { ArrowRight, Inbox, MapPin, Siren } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import fotoDia from '@/assets/pereira-dia.webp'
 import fotoNoche from '@/assets/viaducto-pereira-noche.webp'
+import { ControlModo } from '@/components/ControlModo'
 import { useAuth } from '@/hooks/useAuth'
 import { useModo } from '@/hooks/useModo'
 import { useTema } from '@/hooks/useTema'
 import { AccionesEmergencia } from '@/pages/emergencia/AccionesEmergencia'
-import { MODULOS } from '@/utils/modulos'
+import { MODULOS, modulosParaRol } from '@/utils/modulos'
+import { esAdministrador, esPersonal } from '@/utils/roles'
 
 /** Color propio de cada módulo (clases completas para que Tailwind las incluya). */
 const TONOS = {
@@ -26,6 +28,11 @@ const TONOS = {
     borde: 'hover:border-rose-500',
     flecha: 'text-rose-600 dark:text-rose-400',
   },
+  azul: {
+    icono: 'bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-300',
+    borde: 'hover:border-sky-500',
+    flecha: 'text-sky-700 dark:text-sky-300',
+  },
   gris: {
     icono: 'bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200',
     borde: 'hover:border-slate-500',
@@ -43,13 +50,18 @@ const fechaDeHoy = new Intl.DateTimeFormat('es-CO', {
  * Página de inicio con sesión: portada con una foto de Pereira (de día o de noche según
  * el tema elegido en el login), el saludo y los módulos, cada uno con su color.
  * En Modo Emergencia lo primero son los reportes; los módulos del día a día quedan debajo.
+ * Según el rol: quien reporta ve los botones de reporte; el Inspector y el Administrador, el
+ * acceso a la bandeja de casos; el Administrador, además, el control del modo (CU-04).
  */
 export default function Panel() {
   const { usuario } = useAuth()
   const { enEmergencia } = useModo()
   const { oscuro } = useTema()
   const nombre = usuario.full_name.split(' ')[0]
-  const modulos = MODULOS.filter((m) => m.descripcion)
+  const personal = esPersonal(usuario.role)
+  const visibles = modulosParaRol(MODULOS, usuario.role).filter((m) => m.descripcion)
+  const servicios = visibles.filter((m) => m.grupo !== 'gestion')
+  const gestion = visibles.filter((m) => m.grupo === 'gestion')
   const [hoy] = useState(() => fechaDeHoy.format(new Date()))
 
   return (
@@ -96,13 +108,39 @@ export default function Panel() {
           </div>
           <p className="mt-4 max-w-md text-white/90">
             {enEmergencia
-              ? 'Reporta daños o pide ayuda en 3 pasos. Tu reporte llega a los equipos de atención.'
+              ? personal
+                ? 'Revisa y atiende los casos que reporta la comunidad.'
+                : 'Reporta daños o pide ayuda en 3 pasos. Tu reporte llega a los equipos de atención.'
               : `¿Qué quieres hacer hoy en ${usuario.neighborhood}?`}
           </p>
         </div>
       </section>
 
-      {enEmergencia && (
+      {esAdministrador(usuario.role) && (
+        <div className="mt-6">
+          <ControlModo />
+        </div>
+      )}
+
+      {enEmergencia && personal && (
+        <Link
+          to="/casos"
+          className="mt-6 flex items-center gap-4 rounded-2xl border-2 border-alerta-600 bg-white p-5 transition hover:bg-alerta-50 dark:bg-slate-900 dark:hover:bg-red-950/50"
+        >
+          <Inbox className="size-8 shrink-0 text-alerta-600 dark:text-red-400" aria-hidden="true" />
+          <span className="flex-1">
+            <span className="block font-semibold text-slate-900 dark:text-white">
+              Atender casos reportados
+            </span>
+            <span className="block text-sm text-slate-600 dark:text-slate-300">
+              Revisa los reportes de la comunidad y actualiza su estado.
+            </span>
+          </span>
+          <ArrowRight className="size-5 text-alerta-600 dark:text-red-400" aria-hidden="true" />
+        </Link>
+      )}
+
+      {enEmergencia && !personal && (
         <section className="mt-6" aria-labelledby="titulo-emergencia">
           <h2
             id="titulo-emergencia"
@@ -114,31 +152,41 @@ export default function Panel() {
         </section>
       )}
 
-      <section className="mt-8" aria-labelledby="titulo-modulos">
-        <h2
-          id="titulo-modulos"
-          className="mb-3 text-lg font-semibold text-slate-900 dark:text-white"
-        >
-          {enEmergencia ? 'Otros servicios' : 'Servicios para tu barrio'}
-        </h2>
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {modulos.map((modulo) => (
-            <li key={modulo.ruta}>
-              <TarjetaModulo {...modulo} />
-            </li>
-          ))}
-          <li>
-            <TarjetaModulo
-              ruta="/emergencia/casos"
-              nombre="Mis casos"
-              descripcion="Sigue el estado de los reportes que has hecho."
-              Icono={ClipboardList}
-              tono="gris"
-            />
-          </li>
-        </ul>
-      </section>
+      {gestion.length > 0 && (
+        <SeccionModulos
+          id="titulo-gestion"
+          titulo={
+            personal
+              ? 'Gestión de la emergencia y la ciudad'
+              : 'Tu trabajo como técnico o voluntario'
+          }
+          modulos={gestion}
+        />
+      )}
+
+      <SeccionModulos
+        id="titulo-modulos"
+        titulo={enEmergencia ? 'Otros servicios' : 'Servicios para tu barrio'}
+        modulos={servicios}
+      />
     </>
+  )
+}
+
+function SeccionModulos({ id, titulo, modulos }) {
+  return (
+    <section className="mt-8" aria-labelledby={id}>
+      <h2 id={id} className="mb-3 text-lg font-semibold text-slate-900 dark:text-white">
+        {titulo}
+      </h2>
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {modulos.map((modulo) => (
+          <li key={modulo.ruta}>
+            <TarjetaModulo {...modulo} />
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 

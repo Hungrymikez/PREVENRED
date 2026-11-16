@@ -1,5 +1,5 @@
 import { LoaderCircle, SearchX } from 'lucide-react'
-import { mensajeDeError } from '@/api/client'
+import { textoDeError } from '@/api/client'
 import { Alerta } from '@/components/ui/Alerta'
 
 /** Estados de una lista: cargando, error o sin resultados. */
@@ -19,7 +19,7 @@ export function Cargando({ texto = 'Cargando…' }) {
 }
 
 export function ErrorAlCargar({ error }) {
-  return <Alerta tipo="error">{error?.message ?? mensajeDeError(error)}</Alerta>
+  return <Alerta tipo="error">{textoDeError(error)}</Alerta>
 }
 
 export function SinResultados({ titulo = 'Sin resultados', children }) {

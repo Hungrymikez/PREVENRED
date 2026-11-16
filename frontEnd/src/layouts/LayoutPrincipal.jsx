@@ -4,26 +4,29 @@ import { NavLink, Outlet, useNavigate } from 'react-router'
 import { BannerEmergencia } from '@/components/BannerEmergencia'
 import { InterruptorTema } from '@/components/InterruptorTema'
 import { Logo } from '@/components/Logo'
-import { SimuladorModo } from '@/components/SimuladorModo'
 import { Sincronizador } from '@/components/Sincronizador'
 import { Cargando } from '@/components/ui/Estados'
 import { useAuth } from '@/hooks/useAuth'
 import { useModo } from '@/hooks/useModo'
 import { useTema } from '@/hooks/useTema'
-import { MODULOS, MODULOS_EMERGENCIA } from '@/utils/modulos'
-import { NOMBRE_ROL } from '@/utils/roles'
+import { MODULOS, MODULOS_EMERGENCIA, modulosParaRol } from '@/utils/modulos'
+import { esPersonal, NOMBRE_ROL } from '@/utils/roles'
 
 /**
  * Marco de las páginas con sesión: barra superior con el usuario y el menú.
  * En celular el menú va abajo (barra fija), en pantallas grandes va en la barra superior.
  * En Modo Emergencia muestra el aviso rojo y cambia el menú (RF-02).
+ * El menú depende del rol: el personal de atención ve la bandeja de Casos en vez de Reportar.
  */
 export function LayoutPrincipal() {
   const { usuario, cerrarSesion } = useAuth()
   const navegar = useNavigate()
   const { modo, enEmergencia } = useModo()
   const { oscuro, alternar } = useTema()
-  const menu = enEmergencia ? MODULOS_EMERGENCIA : MODULOS
+  // Cada rol ve solo sus secciones (el backend vuelve a validar cada permiso).
+  const menu = modulosParaRol(enEmergencia ? MODULOS_EMERGENCIA : MODULOS, usuario.role).filter(
+    (m) => !m.soloPanel,
+  )
 
   function salir() {
     cerrarSesion()
@@ -78,7 +81,7 @@ export function LayoutPrincipal() {
           </div>
         </div>
       </header>
-      {enEmergencia && <BannerEmergencia modo={modo} />}
+      {enEmergencia && <BannerEmergencia modo={modo} puedeReportar={!esPersonal(usuario.role)} />}
       <Sincronizador />
 
       <main className="mx-auto max-w-5xl px-4 pt-6 pb-24 md:pb-10">
@@ -92,7 +95,10 @@ export function LayoutPrincipal() {
         aria-label="Principal"
         className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200/80 bg-white/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden dark:border-white/10 dark:bg-slate-900/90"
       >
-        <ul className="grid grid-cols-4">
+        <ul
+          className="grid"
+          style={{ gridTemplateColumns: `repeat(${menu.length}, minmax(0, 1fr))` }}
+        >
           {menu.map(({ ruta, nombre, Icono, exacta }) => (
             <li key={ruta}>
               <NavLink
@@ -109,7 +115,6 @@ export function LayoutPrincipal() {
           ))}
         </ul>
       </nav>
-      <SimuladorModo />
     </div>
   )
 }

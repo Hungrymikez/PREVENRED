@@ -1,15 +1,16 @@
-import { BrickWall, Droplets, Package, PaintRoller, TreePine, Wrench, Zap } from 'lucide-react'
+import { Anvil, BrickWall, Droplets, Package, TreePine, Wrench, Zap } from 'lucide-react'
 
+/** Un ícono por categoría del backend (MaterialCategory); OTROS usa el genérico. */
 const ICONOS = {
-  Construcción: BrickWall,
-  Madera: TreePine,
-  Eléctrico: Zap,
-  Plomería: Droplets,
-  Pintura: PaintRoller,
-  Herramientas: Wrench,
+  CONSTRUCCION: BrickWall,
+  MADERA: TreePine,
+  METAL: Anvil,
+  ELECTRICO: Zap,
+  PLOMERIA: Droplets,
+  HERRAMIENTAS: Wrench,
 }
 
-/** Imagen de relleno mientras no existan las fotos de las publicaciones (CU-47). */
+/** Imagen de relleno para las publicaciones sin fotos (CU-47). */
 export function IconoCategoria({ categoria, className = 'h-32' }) {
   const Icono = ICONOS[categoria] ?? Package
   return (

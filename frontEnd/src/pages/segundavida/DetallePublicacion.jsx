@@ -3,7 +3,7 @@ import { MapPin } from 'lucide-react'
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import { Circle } from 'react-leaflet'
-import { CONDICIONES, MODALIDADES, obtenerPublicacion } from '@/api/segundavida'
+import { CATEGORIAS, CONDICIONES, MODALIDADES, obtenerPublicacion } from '@/api/segundavida'
 import { Mapa } from '@/components/mapa/Mapa'
 import { Alerta } from '@/components/ui/Alerta'
 import { Cargando, ErrorAlCargar } from '@/components/ui/Estados'
@@ -39,8 +39,8 @@ export default function DetallePublicacion() {
             <div>
               <Galeria publicacion={p} />
               <div className="mt-4 flex flex-wrap gap-1">
-                <Etiqueta color="azul">{MODALIDADES[p.offerType].nombre}</Etiqueta>
-                <Etiqueta>{p.category}</Etiqueta>
+                <Etiqueta color="azul">{MODALIDADES[p.offerType]?.nombre}</Etiqueta>
+                <Etiqueta>{CATEGORIAS[p.category] ?? p.category}</Etiqueta>
                 <Etiqueta>{CONDICIONES[p.condition]}</Etiqueta>
               </div>
               <h1 className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{p.title}</h1>
@@ -52,7 +52,9 @@ export default function DetallePublicacion() {
               <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <dt className="text-slate-500 dark:text-slate-400">Cantidad</dt>
-                  <dd className="font-medium text-slate-900 dark:text-white">{p.quantity}</dd>
+                  <dd className="font-medium text-slate-900 dark:text-white">
+                    {p.quantity.toLocaleString('es-CO')} {p.unit}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-slate-500 dark:text-slate-400">Publicado por</dt>
@@ -99,7 +101,7 @@ function Galeria({ publicacion: p }) {
       <img
         src={fotos[elegida]}
         alt={`Foto ${elegida + 1} de ${p.title}`}
-        className="h-72 w-full rounded-lg bg-slate-100 object-contain"
+        className="h-72 w-full rounded-lg bg-slate-100 object-contain dark:bg-slate-800"
       />
       {fotos.length > 1 && (
         <ul className="mt-2 flex gap-2 overflow-x-auto">
@@ -110,9 +112,13 @@ function Galeria({ publicacion: p }) {
                 onClick={() => setElegida(i)}
                 aria-label={`Ver foto ${i + 1}`}
                 aria-pressed={i === elegida}
-                className="block rounded-md ring-offset-2 aria-pressed:ring-2 aria-pressed:ring-marca-600"
+                className="block rounded-md ring-offset-2 aria-pressed:ring-2 aria-pressed:ring-marca-600 dark:ring-offset-slate-950 dark:aria-pressed:ring-amber-400"
               >
-                <img src={url} alt="" className="size-16 rounded-md object-cover" />
+                <img
+                  src={url}
+                  alt=""
+                  className="size-16 rounded-md bg-slate-100 object-cover dark:bg-slate-800"
+                />
               </button>
             </li>
           ))}

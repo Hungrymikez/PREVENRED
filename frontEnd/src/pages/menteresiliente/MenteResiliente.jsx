@@ -1,22 +1,39 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { HeartHandshake, Phone, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import {
   enviarRegistro,
-  LINEAS_DE_APOYO,
+  MAX_TEXTO,
   NIVELES_ANIMO,
+  obtenerLineasDeAyuda,
+  obtenerMiConsentimiento,
   otorgarConsentimiento,
-  tieneConsentimiento,
 } from '@/api/bienestar'
+import { mensajeDeError } from '@/api/client'
 import { Alerta } from '@/components/ui/Alerta'
 import { Boton } from '@/components/ui/Boton'
 import { Campo } from '@/components/ui/Campo'
+import { Cargando } from '@/components/ui/Estados'
 import { useAuth } from '@/hooks/useAuth'
+
+const CLAVE_CONSENTIMIENTO = ['bienestar', 'consentimiento']
+
+/** Si no cargan las líneas del backend, al menos se muestra la de emergencias (CU-27). */
+const LINEA_EMERGENCIAS = {
+  name: 'Emergencias generales',
+  phone: '123',
+  type: 'Policía / Cruz Roja / Bomberos',
+}
 
 /** Mente Resiliente: consentimiento (CU-24), registro de bienestar (CU-23) y apoyo (CU-27). */
 export default function MenteResiliente() {
-  const [consentimiento, setConsentimiento] = useState(tieneConsentimiento)
+  const queryClient = useQueryClient()
+  // CU-24: el consentimiento lo guarda el backend (wellbeing_consents); null = aún no lo da.
+  const consentimiento = useQuery({
+    queryKey: CLAVE_CONSENTIMIENTO,
+    queryFn: obtenerMiConsentimiento,
+  })
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -27,17 +44,23 @@ export default function MenteResiliente() {
         </p>
       </div>
 
-      {consentimiento ? (
+      {consentimiento.isPending ? (
+        <Cargando />
+      ) : consentimiento.error ? (
+        <Alerta tipo="error">{mensajeDeError(consentimiento.error)}</Alerta>
+      ) : consentimiento.data ? (
         <RegistroBienestar />
       ) : (
-        <Consentimiento onAceptar={() => setConsentimiento(true)} />
+        <Consentimiento
+          onAceptar={(otorgado) => queryClient.setQueryData(CLAVE_CONSENTIMIENTO, otorgado)}
+        />
       )}
       <ApoyoProfesional />
     </div>
   )
 }
 
-/** CU-24. Sin consentimiento no se recopila ninguna respuesta. */
+/** CU-24. Sin consentimiento no se recopila ninguna respuesta (el backend responde 403). */
 function Consentimiento({ onAceptar }) {
   const [acepta, setAcepta] = useState(false)
   const aceptar = useMutation({ mutationFn: otorgarConsentimiento, onSuccess: onAceptar })
@@ -69,7 +92,13 @@ function Consentimiento({ onAceptar }) {
         />
         Entiendo y acepto participar de forma anónima.
       </label>
+      {aceptar.error && (
+        <div className="mt-3">
+          <Alerta tipo="error">{mensajeDeError(aceptar.error)}</Alerta>
+        </div>
+      )}
       <Boton
+        type="button"
         className="mt-4"
         disabled={!acepta}
         cargando={aceptar.isPending}
@@ -81,22 +110,25 @@ function Consentimiento({ onAceptar }) {
   )
 }
 
-/** CU-23. Nivel de ánimo (5 niveles) y texto opcional. */
+/** CU-23. Nivel de ánimo (1 a 5), texto opcional y barrio (por defecto, el de la cuenta). */
 function RegistroBienestar() {
   const { usuario } = useAuth()
+  const valoresIniciales = { animo: '', texto: '', barrio: usuario?.neighborhood ?? '' }
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm({ defaultValues: { animo: '', texto: '' } })
+  } = useForm({ defaultValues: valoresIniciales })
 
   const envio = useMutation({
-    mutationFn: ({ animo, texto }) =>
-      enviarRegistro({ animo: Number(animo), texto: texto.trim(), barrio: usuario.neighborhood }),
+    mutationFn: ({ animo, texto, barrio }) =>
+      enviarRegistro({ animo: Number(animo), texto: texto.trim(), barrio: barrio.trim() }),
   })
 
   if (envio.isSuccess) {
+    // RF-18: si el backend detecta señales de crisis, se muestra su mensaje de canalización.
+    const { crisis_detected: crisis, crisis_support_message: mensajeCrisis } = envio.data
     const animoBajo = envio.variables.animo <= 2
     return (
       <section className="rounded-2xl bg-white p-6 shadow-sm dark:bg-slate-900" role="status">
@@ -106,17 +138,24 @@ function RegistroBienestar() {
         <p className="mt-1 text-slate-700 dark:text-slate-200">
           Tu respuesta ayuda a entender cómo está tu barrio y a llevar apoyo donde más se necesita.
         </p>
-        {animoBajo && (
-          <p className="mt-3 text-slate-700 dark:text-slate-200">
-            Si te está costando, no tienes que pasar por esto sin ayuda. Abajo encuentras a quién
-            acudir.
-          </p>
+        {crisis && mensajeCrisis ? (
+          <div className="mt-3">
+            <Alerta tipo="error">{mensajeCrisis}</Alerta>
+          </div>
+        ) : (
+          animoBajo && (
+            <p className="mt-3 text-slate-700 dark:text-slate-200">
+              Si te está costando, no tienes que pasar por esto sin ayuda. Abajo encuentras a quién
+              acudir.
+            </p>
+          )
         )}
         <Boton
+          type="button"
           variante="secundario"
           className="mt-4"
           onClick={() => {
-            reset()
+            reset(valoresIniciales)
             envio.reset()
           }}
         >
@@ -132,9 +171,7 @@ function RegistroBienestar() {
       noValidate
       className="space-y-5 rounded-2xl bg-white p-6 shadow-sm dark:bg-slate-900"
     >
-      {envio.error && (
-        <Alerta tipo="error">No se pudo enviar. Revisa tu conexión e intenta de nuevo.</Alerta>
-      )}
+      {envio.error && <Alerta tipo="error">{mensajeDeError(envio.error)}</Alerta>}
 
       <fieldset>
         <legend className="font-semibold text-slate-900 dark:text-white">
@@ -167,12 +204,21 @@ function RegistroBienestar() {
       </fieldset>
 
       <Campo
+        etiqueta="Barrio o comuna"
+        ayuda="Tu respuesta se agrupa por barrio, nunca con tu nombre."
+        error={errors.barrio?.message}
+        {...register('barrio', {
+          validate: (v) => v.trim().length >= 2 || 'Escribe tu barrio o comuna (mínimo 2 letras).',
+        })}
+      />
+
+      <Campo
         como="textarea"
         rows={4}
-        maxLength={500}
+        maxLength={MAX_TEXTO}
         etiqueta="¿Quieres contarnos algo más? (opcional)"
         placeholder="Escribe lo que quieras compartir…"
-        ayuda="Máximo 500 caracteres. No escribas tu nombre ni datos personales."
+        ayuda={`Máximo ${MAX_TEXTO} caracteres. No escribas tu nombre ni datos personales.`}
         {...register('texto')}
       />
 
@@ -183,11 +229,18 @@ function RegistroBienestar() {
   )
 }
 
-/** CU-27. Siempre visible, haya o no consentimiento. */
+/** CU-27. Siempre visible, haya o no consentimiento. Las líneas vienen del backend. */
 function ApoyoProfesional() {
+  const { data, isPending, error } = useQuery({
+    queryKey: ['bienestar', 'lineas'],
+    queryFn: obtenerLineasDeAyuda,
+    staleTime: Infinity,
+  })
+  const lineas = error ? [LINEA_EMERGENCIAS] : (data?.helplines ?? [])
+
   return (
     <section
-      className="rounded-2xl border border-marca-100 bg-marca-50 p-6 dark:bg-amber-400/10"
+      className="rounded-2xl border border-marca-100 bg-marca-50 p-6 dark:border-white/10 dark:bg-amber-400/10"
       aria-labelledby="titulo-apoyo"
     >
       <h2
@@ -197,28 +250,33 @@ function ApoyoProfesional() {
         <HeartHandshake className="size-5" aria-hidden="true" />
         ¿Necesitas hablar con alguien ahora?
       </h2>
-      <ul className="mt-3 space-y-3">
-        {LINEAS_DE_APOYO.map((linea) => (
-          <li
-            key={linea.nombre}
-            className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 dark:bg-slate-900"
-          >
-            <div>
-              <p className="font-medium text-slate-900 dark:text-white">{linea.nombre}</p>
-              <p className="text-sm text-slate-600 dark:text-slate-300">{linea.detalle}</p>
-            </div>
-            {linea.telefono && (
+      {data?.city && (
+        <p className="mt-1 text-sm text-marca-900 dark:text-amber-100">Líneas en {data.city}</p>
+      )}
+      {isPending ? (
+        <Cargando texto="Cargando líneas de ayuda…" />
+      ) : (
+        <ul className="mt-3 space-y-3">
+          {lineas.map((linea) => (
+            <li
+              key={linea.phone}
+              className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 dark:bg-slate-900"
+            >
+              <div>
+                <p className="font-medium text-slate-900 dark:text-white">{linea.name}</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300">{linea.type}</p>
+              </div>
               <a
-                href={`tel:${linea.telefono}`}
+                href={`tel:${linea.phone}`}
                 className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-marca-600 px-3 py-2 font-medium text-white hover:bg-marca-700 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400"
               >
                 <Phone className="size-4" aria-hidden="true" />
-                {linea.telefono}
+                {linea.phone}
               </a>
-            )}
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   )
 }

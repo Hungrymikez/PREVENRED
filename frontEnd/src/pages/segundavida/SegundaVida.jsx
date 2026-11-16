@@ -2,23 +2,37 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { MapPin, Plus } from 'lucide-react'
 import { Link } from 'react-router'
 import { Marker, Popup } from 'react-leaflet'
-import { CATEGORIAS, CONDICIONES, listarPublicaciones, MODALIDADES } from '@/api/segundavida'
+import {
+  CATEGORIAS,
+  CONDICIONES,
+  listarPublicaciones,
+  MODALIDADES,
+  origenDeBusqueda,
+} from '@/api/segundavida'
 import { Mapa } from '@/components/mapa/Mapa'
 import { SelectorVista } from '@/components/SelectorVista'
 import { Campo } from '@/components/ui/Campo'
 import { Cargando, ErrorAlCargar, SinResultados } from '@/components/ui/Estados'
 import { Etiqueta } from '@/components/ui/Etiqueta'
+import { useAuth } from '@/hooks/useAuth'
 import { useFiltrosUrl } from '@/hooks/useFiltrosUrl'
 import { formatearDistancia } from '@/utils/distancia'
+import { NOMBRES_ZONAS } from '@/utils/zonas'
 import { Portada } from './Portada'
 import { textoPrecio } from './precio'
 
-/** CU-12 · Buscar materiales por ubicación. */
+/**
+ * CU-12 · Buscar materiales por ubicación. El backend busca alrededor de un punto: el barrio
+ * elegido en "Cerca de" (por defecto, el de la cuenta; si no está en la lista, el Centro).
+ */
 export default function SegundaVida() {
+  const { usuario } = useAuth()
   const [filtros, cambiar] = useFiltrosUrl()
   const { vista = 'lista', ...resto } = filtros
   const modalidad = filtros.modalidad ?? 'VENTA'
-  const consulta = { ...resto, modalidad }
+  const barrioCuenta = NOMBRES_ZONAS.includes(usuario?.neighborhood) ? usuario.neighborhood : ''
+  const cerca = filtros.cerca ?? (barrioCuenta || 'Centro')
+  const consulta = { ...resto, modalidad, cerca }
 
   const {
     data: publicaciones,
@@ -68,7 +82,7 @@ export default function SegundaVida() {
       </div>
 
       {/* Filtros */}
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Campo
           etiqueta="Buscar"
           type="search"
@@ -83,8 +97,10 @@ export default function SegundaVida() {
           onChange={(e) => cambiar('categoria', e.target.value)}
         >
           <option value="">Todas</option>
-          {CATEGORIAS.map((c) => (
-            <option key={c}>{c}</option>
+          {Object.entries(CATEGORIAS).map(([valor, nombre]) => (
+            <option key={valor} value={valor}>
+              {nombre}
+            </option>
           ))}
         </Campo>
         <Campo
@@ -100,7 +116,7 @@ export default function SegundaVida() {
             </option>
           ))}
         </Campo>
-        {modalidad !== 'INTERCAMBIO' && (
+        {modalidad !== 'DONACION' && (
           <Campo
             etiqueta={modalidad === 'ALQUILER' ? 'Precio máximo por día' : 'Precio máximo'}
             type="number"
@@ -112,6 +128,16 @@ export default function SegundaVida() {
             onChange={(e) => cambiar('precioMax', e.target.value)}
           />
         )}
+        <Campo
+          como="select"
+          etiqueta="Cerca de"
+          value={cerca}
+          onChange={(e) => cambiar('cerca', e.target.value)}
+        >
+          {NOMBRES_ZONAS.map((z) => (
+            <option key={z}>{z}</option>
+          ))}
+        </Campo>
       </div>
 
       <div className="mt-5 flex items-center justify-between gap-3">
@@ -129,7 +155,7 @@ export default function SegundaVida() {
         ) : publicaciones.length === 0 ? (
           <SinResultados>Prueba quitando filtros o buscando en otra pestaña.</SinResultados>
         ) : vista === 'mapa' ? (
-          <Mapa className="h-[28rem]">
+          <Mapa centro={origenDeBusqueda(cerca)} className="h-[28rem]">
             {publicaciones.map((p) => (
               <Marker key={p.id} position={p.coordenadas}>
                 <Popup>
@@ -164,7 +190,7 @@ function TarjetaPublicacion({ publicacion: p }) {
     >
       <Portada publicacion={p} />
       <div className="mt-3 flex flex-wrap gap-1">
-        <Etiqueta color="azul">{p.category}</Etiqueta>
+        <Etiqueta color="azul">{CATEGORIAS[p.category] ?? p.category}</Etiqueta>
         <Etiqueta>{CONDICIONES[p.condition]}</Etiqueta>
       </div>
       <h2 className="mt-2 font-semibold text-slate-900 dark:text-white">{p.title}</h2>

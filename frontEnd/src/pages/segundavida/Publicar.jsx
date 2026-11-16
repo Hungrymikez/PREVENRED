@@ -3,7 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useNavigate } from 'react-router'
-import { CATEGORIAS, CONDICIONES, MODALIDADES, publicar } from '@/api/segundavida'
+import { CATEGORIAS, CONDICIONES, MODALIDADES, publicar, UNIDADES } from '@/api/segundavida'
+import { textoDeError } from '@/api/client'
 import { Alerta } from '@/components/ui/Alerta'
 import { Boton } from '@/components/ui/Boton'
 import { Campo } from '@/components/ui/Campo'
@@ -13,7 +14,7 @@ import { NOMBRES_ZONAS } from '@/utils/zonas'
 import { esquemaPublicacion } from './esquema'
 import { SelectorFotos } from './SelectorFotos'
 
-/** CU-11 · Publicar material. */
+/** CU-11 · Publicar material. Las fotos se suben primero (CU-47) y viajan en media_urls. */
 export default function Publicar() {
   const { usuario } = useAuth()
   const navegar = useNavigate()
@@ -34,6 +35,7 @@ export default function Publicar() {
       category: '',
       condition: '',
       quantity: 1,
+      unit: UNIDADES[0],
       price: '',
       // Por defecto, el barrio de su cuenta si está en la lista.
       zona: NOMBRES_ZONAS.includes(usuario.neighborhood) ? usuario.neighborhood : '',
@@ -42,7 +44,7 @@ export default function Publicar() {
   const modalidad = useWatch({ control, name: 'offerType' })
 
   const publicacion = useMutation({
-    mutationFn: (datos) => publicar(datos, usuario.full_name, fotos),
+    mutationFn: (datos) => publicar(datos, fotos),
     onSuccess: (nueva) => {
       queryClient.invalidateQueries({ queryKey: ['publicaciones'] }) // la lista se recarga
       navegar(`/segundavida/${nueva.id}`)
@@ -64,7 +66,7 @@ export default function Publicar() {
         noValidate
         className="mt-6 space-y-4 rounded-2xl bg-white p-6 shadow-sm dark:bg-slate-900"
       >
-        {publicacion.error && <Alerta tipo="error">{publicacion.error.message}</Alerta>}
+        {publicacion.error && <Alerta tipo="error">{textoDeError(publicacion.error)}</Alerta>}
 
         <fieldset>
           <legend className="mb-2 text-sm font-medium text-slate-800 dark:text-slate-100">
@@ -106,8 +108,10 @@ export default function Publicar() {
             {...register('category')}
           >
             <option value="">Elige…</option>
-            {CATEGORIAS.map((c) => (
-              <option key={c}>{c}</option>
+            {Object.entries(CATEGORIAS).map(([valor, nombre]) => (
+              <option key={valor} value={valor}>
+                {nombre}
+              </option>
             ))}
           </Campo>
           <Campo
@@ -126,12 +130,18 @@ export default function Publicar() {
           <Campo
             etiqueta="Cantidad"
             type="number"
-            min="1"
-            inputMode="numeric"
+            min="0"
+            step="any"
+            inputMode="decimal"
             error={errors.quantity?.message}
             {...register('quantity')}
           />
-          {modalidad !== 'INTERCAMBIO' && (
+          <Campo como="select" etiqueta="Unidad" error={errors.unit?.message} {...register('unit')}>
+            {UNIDADES.map((u) => (
+              <option key={u}>{u}</option>
+            ))}
+          </Campo>
+          {modalidad !== 'DONACION' && (
             <Campo
               etiqueta={modalidad === 'ALQUILER' ? 'Costo por día (COP)' : 'Precio (COP)'}
               type="number"
