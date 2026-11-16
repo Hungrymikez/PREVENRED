@@ -128,6 +128,25 @@ def test_mongo_repository_default_and_persist(db) -> None:
     assert len(docs) == 1  # solo se persistió el cambio (default no se guardó)
 
 
+def test_mongo_repository_tolera_documento_sin_previous_mode(db) -> None:
+    """Documentos legados en PrevenRED2 no deben tumbar GET /mode/current."""
+    from bson import ObjectId
+
+    db["operational_modes"].insert_one(
+        {
+            "_id": ObjectId(),
+            "mode": "EMERGENCIA",
+            "reason": "Documento antiguo incompleto",
+            "active": True,
+            "startedAt": utcnow(),
+        }
+    )
+    repo = MongoOperationalModeRepository(db)
+    current = repo.get_current_mode()
+    assert current.mode == OperationalModeType.EMERGENCIA
+    assert current.previous_mode == OperationalModeType.COTIDIANO
+
+
 def test_api_get_current_mode_endpoint(client) -> None:
     response = client.get("/api/v1/mode/current")
     assert response.status_code == 200
