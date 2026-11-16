@@ -14,6 +14,7 @@ import {
 } from '@/routes/paginas'
 import { RutaEmergencia } from '@/routes/RutaEmergencia'
 import { RutaProtegida, RutaPublica } from '@/routes/RutaProtegida'
+import { ROLES, ROLES_PERSONAL, ROLES_REPORTANTES } from '@/utils/roles'
 
 // Cada página se descarga solo cuando se visita (la app abre más rápido, sobre todo en celular).
 const Login = lazy(() => import('@/pages/auth/Login'))
@@ -30,6 +31,17 @@ const Emergencia = lazy(cargarEmergencia)
 const Reportar = lazy(cargarReportar)
 const MisCasos = lazy(cargarMisCasos)
 const DetalleCaso = lazy(cargarDetalleCaso)
+const BandejaCasos = lazy(() => import('@/pages/casos/BandejaCasos'))
+const MiPerfilTecnico = lazy(() => import('@/pages/oficiosya/MiPerfilTecnico'))
+const Voluntariado = lazy(() => import('@/pages/voluntariado/Voluntariado'))
+const AsignarVoluntarios = lazy(() => import('@/pages/voluntariado/AsignarVoluntarios'))
+const Inspecciones = lazy(() => import('@/pages/inspeccion/Inspecciones'))
+const NuevaInspeccion = lazy(() => import('@/pages/inspeccion/NuevaInspeccion'))
+const Donar = lazy(() => import('@/pages/donaciones/Donar'))
+const GestionDonaciones = lazy(() => import('@/pages/donaciones/GestionDonaciones'))
+const Tablero = lazy(() => import('@/pages/admin/Tablero'))
+const VerificarTecnicos = lazy(() => import('@/pages/admin/VerificarTecnicos'))
+const Auditoria = lazy(() => import('@/pages/admin/Auditoria'))
 
 export default function App() {
   return (
@@ -55,17 +67,44 @@ export default function App() {
             <Route path="/segundavida/publicar" element={<Publicar />} />
             <Route path="/segundavida/:id" element={<DetallePublicacion />} />
             <Route path="/oficiosya" element={<OficiosYa />} />
+            {/* Antes que /oficiosya/:id para que "mi-perfil" no se lea como un id */}
+            <Route element={<RutaProtegida roles={[ROLES.TECNICO_VOLUNTARIO]} />}>
+              <Route path="/oficiosya/mi-perfil" element={<MiPerfilTecnico />} />
+              <Route path="/voluntariado" element={<Voluntariado />} />
+            </Route>
             <Route path="/oficiosya/:id" element={<PerfilTecnico />} />
             <Route path="/mente-resiliente" element={<MenteResiliente />} />
 
-            {/* Modo Emergencia: reportar solo con la emergencia activa (CU-29 E3) */}
-            <Route element={<RutaEmergencia />}>
-              <Route path="/emergencia" element={<Emergencia />} />
-              <Route path="/emergencia/reportar/:categoria" element={<Reportar />} />
+            {/* Reportar y seguir los propios casos: ciudadanos, técnicos y profesionales (CU-29 a CU-32) */}
+            <Route element={<RutaProtegida roles={ROLES_REPORTANTES} />}>
+              {/* Reportar solo con la emergencia activa (CU-29 E3) */}
+              <Route element={<RutaEmergencia />}>
+                <Route path="/emergencia" element={<Emergencia />} />
+                <Route path="/emergencia/reportar/:categoria" element={<Reportar />} />
+              </Route>
+              {/* Los casos se pueden consultar también después de la emergencia (CU-32) */}
+              <Route path="/emergencia/casos" element={<MisCasos />} />
+              <Route path="/emergencia/casos/:caseId" element={<DetalleCaso />} />
+              {/* CU-33: ofrecer una donación */}
+              <Route path="/donar" element={<Donar />} />
             </Route>
-            {/* Los casos se pueden consultar también después de la emergencia (CU-32) */}
-            <Route path="/emergencia/casos" element={<MisCasos />} />
-            <Route path="/emergencia/casos/:caseId" element={<DetalleCaso />} />
+
+            {/* Bandeja de todos los casos: Inspector y Administrador (CU-39) */}
+            <Route element={<RutaProtegida roles={ROLES_PERSONAL} />}>
+              <Route path="/casos" element={<BandejaCasos />} />
+              {/* Censo e inspección de inmuebles (CU-34 a CU-36) y voluntarios (CU-43) */}
+              <Route path="/inspecciones" element={<Inspecciones />} />
+              <Route path="/inspecciones/nueva" element={<NuevaInspeccion />} />
+              <Route path="/voluntariado/asignar" element={<AsignarVoluntarios />} />
+            </Route>
+
+            {/* Solo Administrador: tablero, técnicos, donaciones y auditoría */}
+            <Route element={<RutaProtegida roles={[ROLES.ADMINISTRADOR]} />}>
+              <Route path="/admin/tablero" element={<Tablero />} />
+              <Route path="/admin/tecnicos" element={<VerificarTecnicos />} />
+              <Route path="/admin/auditoria" element={<Auditoria />} />
+              <Route path="/donaciones" element={<GestionDonaciones />} />
+            </Route>
           </Route>
         </Route>
 

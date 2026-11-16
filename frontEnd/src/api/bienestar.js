@@ -1,11 +1,15 @@
 /**
- * Mente Resiliente (CU-23, CU-24, CU-27). DATOS DE PRUEBA: cuando el backend tenga el módulo
- * wellbeing, cada función pasa a llamar a la API.
- * Privacidad (RN-03): la respuesta NO se guarda con el usuario, solo con su barrio y la fecha.
+ * Mente Resiliente (CU-23, CU-24, CU-27). Conectado al backend real (/wellbeing).
+ * Privacidad (RN-03): la encuesta NO se guarda con el usuario, solo con su barrio, el nivel de
+ * ánimo y el texto (el backend enmascara datos personales antes de guardarlo).
  */
-import { simularRed } from '@/api/mocks/simular'
+import { api } from '@/api/client'
 
-const CLAVE_CONSENTIMIENTO = 'prevenred_consentimiento_bienestar'
+/** Versión del aviso de consentimiento que acepta la persona (wellbeing_consents). */
+export const VERSION_CONSENTIMIENTO = 'v1.0'
+
+/** Máximo de caracteres del texto libre (igual que el backend). */
+export const MAX_TEXTO = 1000
 
 export const NIVELES_ANIMO = [
   { valor: 5, nombre: 'Muy bien', emoji: '😄' },
@@ -15,40 +19,43 @@ export const NIVELES_ANIMO = [
   { valor: 1, nombre: 'Muy mal', emoji: '😢' },
 ]
 
-/** CU-24. Versión real: lo guarda el backend en wellbeing_consents. */
-export function tieneConsentimiento() {
+/**
+ * CU-24. Consentimiento vigente de quien consulta, o null si aún no lo ha dado
+ * (el backend responde 404 si no existe o fue revocado).
+ */
+export async function obtenerMiConsentimiento() {
   try {
-    return localStorage.getItem(CLAVE_CONSENTIMIENTO) === 'v1'
-  } catch {
-    return false
+    const { data } = await api.get('/wellbeing/consent/me')
+    return data
+  } catch (error) {
+    if (error?.response?.status === 404) return null
+    throw error
   }
 }
 
-export function otorgarConsentimiento() {
-  try {
-    localStorage.setItem(CLAVE_CONSENTIMIENTO, 'v1')
-  } catch {
-    // Sin almacenamiento disponible: se pedirá de nuevo la próxima vez.
-  }
-  return simularRed(true, 200)
+/** CU-24. Lo guarda el backend en wellbeing_consents (uno por usuario). */
+export async function otorgarConsentimiento() {
+  const { data } = await api.post('/wellbeing/consent', {
+    terms_version: VERSION_CONSENTIMIENTO,
+  })
+  return data
 }
 
-/** CU-23. Solo se envía { animo, texto, barrio }: el nivel de ánimo, el texto opcional y el barrio. */
-// Versión real: api.post('/wellbeing/surveys', { answers: { animo, texto }, zone: barrio })
-export function enviarRegistro() {
-  return simularRed({ recibido: true })
+/**
+ * CU-23. Envía { neighborhood, mood_score (1-5), text? }. Devuelve, entre otros,
+ * `crisis_detected` y `crisis_support_message` (RF-18: canalización inmediata).
+ */
+export async function enviarRegistro({ animo, texto, barrio }) {
+  const { data } = await api.post('/wellbeing/surveys', {
+    neighborhood: barrio,
+    mood_score: animo,
+    text: texto ?? '',
+  })
+  return data
 }
 
-/** CU-27. El número oficial de la línea de apoyo está por confirmar (doc 05, E1). */
-export const LINEAS_DE_APOYO = [
-  {
-    nombre: 'Línea de emergencias',
-    detalle: 'Si tú o alguien está en peligro inmediato.',
-    telefono: '123',
-  },
-  {
-    nombre: 'Línea de apoyo en salud mental',
-    detalle: 'Número oficial por confirmar con la Secretaría de Salud de Pereira.',
-    telefono: null,
-  },
-]
+/** CU-27. Líneas de ayuda oficiales: { city, helplines: [{ name, phone, type }] }. */
+export async function obtenerLineasDeAyuda() {
+  const { data } = await api.get('/wellbeing/helplines')
+  return data
+}

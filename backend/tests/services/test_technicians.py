@@ -52,6 +52,12 @@ class InMemoryTechnicianRepository(TechnicianRepository):
             res = [p for p in res if specialty in p.specialties]
         return res[:limit]
 
+    async def list_by_status(
+        self, status: VerificationStatus, limit: int = 100
+    ) -> list[TechnicianProfile]:
+        res = [p for p in self.items.values() if p.verification_status == status]
+        return sorted(res, key=lambda p: p.created_at)[:limit]
+
 
 @pytest.fixture
 def tech_user() -> User:

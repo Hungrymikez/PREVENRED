@@ -105,3 +105,36 @@ def test_descripcion_de_exactamente_5_caracteres_es_valida():
         assigned_by=EntityId.generate(),
     )
     assert assignment.task_description == "abcde"
+
+
+# ---------- CU-44 perfil propio y CU-43 listado de voluntarios ----------
+
+
+def test_mi_perfil_responde_404_si_no_esta_inscrito(api, act_as, make_user):
+    act_as(make_user(Role.TECNICO))
+    assert api.get(f"{BASE}/me").status_code == 404
+
+
+def test_mi_perfil_devuelve_el_perfil_propio(api, act_as, make_user):
+    user = act_as(make_user(Role.TECNICO))
+    created = _register(api).json()
+    r = api.get(f"{BASE}/me")
+    assert r.status_code == 200
+    assert r.json()["id"] == created["id"]
+    assert r.json()["user_id"] == user.id
+
+
+@pytest.mark.parametrize("role", [Role.ADMIN, Role.INSPECTOR])
+def test_coordinador_lista_voluntarios_disponibles(api, act_as, make_user, role):
+    act_as(make_user(Role.TECNICO))
+    vol_id = _register(api).json()["id"]
+    act_as(make_user(role))
+    r = api.get(f"{BASE}/volunteers")
+    assert r.status_code == 200
+    assert [v["id"] for v in r.json()] == [vol_id]
+
+
+@pytest.mark.parametrize("role", [Role.CIUDADANO, Role.TECNICO])
+def test_listar_voluntarios_sin_rol_coordinador_responde_403(api, act_as, make_user, role):
+    act_as(make_user(role))
+    assert api.get(f"{BASE}/volunteers").status_code == 403

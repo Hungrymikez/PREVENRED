@@ -34,6 +34,9 @@ class InMemoryAidRepository(AidRepository):
     async def list_pending_offers(self, category=None) -> list[AidOffer]:
         return [o for o in self.offers.values() if o.status == AidStatus.PENDIENTE]
 
+    async def list_offers_by_donor(self, donor_id) -> list[AidOffer]:
+        return [o for o in self.offers.values() if o.donor_id == donor_id]
+
     async def save_need(self, need: AidNeed) -> None:
         self.needs[need.id.value] = need
 
@@ -200,3 +203,97 @@ async def test_matching_distance_cutoff(admin_user: User, citizen_user: User) ->
         ExecuteMatchingCommand(admin_user=admin_user, max_distance_meters=15000.0)
     )
     assert len(matches) == 0
+
+
+@pytest.mark.asyncio
+async def test_matching_parcial_conserva_el_sobrante(admin_user: User, citizen_user: User) -> None:
+    """CU-42: emparejar 50 de 60 litros deja 10 disponibles en la oferta (no se pierden)."""
+    repo = InMemoryAidRepository()
+    use_case = ManageAidUseCase(repo)
+    need = await use_case.request_aid(
+        RequestAidCommand(
+            title="Agua para albergue",
+            category=AidCategory.AGUA,
+            quantity=50.0,
+            unit="litros",
+            priority=AidPriority.ALTA,
+            longitude=-75.69,
+            latitude=4.81,
+            requester=citizen_user,
+        )
+    )
+    offer = await use_case.offer_aid(
+        OfferAidCommand(
+            title="Agua embotellada",
+            category=AidCategory.AGUA,
+            quantity=60.0,
+            unit="litros",
+            longitude=-75.691,
+            latitude=4.811,
+            donor=citizen_user,
+        )
+    )
+
+    [match] = await use_case.run_matching(ExecuteMatchingCommand(admin_user=admin_user))
+
+    assert match.matched_quantity == 50.0
+    assert need.status == AidStatus.EMPAREJADO and need.remaining_quantity == 0
+    assert offer.status == AidStatus.PENDIENTE
+    assert offer.available_quantity == pytest.approx(10.0)
+    assert offer.quantity == 60.0  # la cantidad original se conserva
+
+    # Una nueva necesidad usa el sobrante de la misma oferta
+    otra = await use_case.request_aid(
+        RequestAidCommand(
+            title="Agua para comedor",
+            category=AidCategory.AGUA,
+            quantity=30.0,
+            unit="litros",
+            priority=AidPriority.MEDIA,
+            longitude=-75.69,
+            latitude=4.81,
+            requester=citizen_user,
+        )
+    )
+    [segundo] = await use_case.run_matching(ExecuteMatchingCommand(admin_user=admin_user))
+    assert segundo.offer_id == offer.id
+    assert segundo.matched_quantity == pytest.approx(10.0)
+    assert offer.status == AidStatus.EMPAREJADO
+    assert otra.status == AidStatus.PENDIENTE
+    assert otra.remaining_quantity == pytest.approx(20.0)
+
+
+@pytest.mark.asyncio
+async def test_una_necesidad_se_cubre_con_varias_ofertas(
+    admin_user: User, citizen_user: User
+) -> None:
+    repo = InMemoryAidRepository()
+    use_case = ManageAidUseCase(repo)
+    need = await use_case.request_aid(
+        RequestAidCommand(
+            title="Mercados familiares",
+            category=AidCategory.ALIMENTOS,
+            quantity=10.0,
+            unit="kg",
+            priority=AidPriority.URGENTE,
+            longitude=-75.69,
+            latitude=4.81,
+            requester=citizen_user,
+        )
+    )
+    for qty in (4.0, 4.0):
+        await use_case.offer_aid(
+            OfferAidCommand(
+                title="Arroz",
+                category=AidCategory.ALIMENTOS,
+                quantity=qty,
+                unit="kg",
+                longitude=-75.69,
+                latitude=4.81,
+                donor=citizen_user,
+            )
+        )
+    matches = await use_case.run_matching(ExecuteMatchingCommand(admin_user=admin_user))
+    assert [m.matched_quantity for m in matches] == [4.0, 4.0]
+    assert need.status == AidStatus.PENDIENTE
+    assert need.remaining_quantity == pytest.approx(2.0)

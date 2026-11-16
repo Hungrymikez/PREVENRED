@@ -28,11 +28,16 @@ export function Pendientes() {
 
   return (
     <section className="mt-6" aria-labelledby="titulo-pendientes">
-      <h2 id="titulo-pendientes" className="flex items-center gap-2 font-semibold text-slate-900">
+      <h2
+        id="titulo-pendientes"
+        className="flex items-center gap-2 font-semibold text-slate-900 dark:text-white"
+      >
         <CloudOff className="size-5 text-amber-600" aria-hidden="true" />
         Guardados en este celular
       </h2>
-      <p className="text-sm text-slate-600">Se envían solos cuando hay conexión.</p>
+      <p className="text-sm text-slate-600 dark:text-slate-300">
+        Se envían solos cuando hay conexión.
+      </p>
 
       <ul className="mt-3 divide-y divide-amber-100 rounded-2xl border border-amber-200 bg-amber-50">
         {pendientes.map(({ clientId, creadoEn, estado, error, datos }) => {
@@ -41,10 +46,12 @@ export function Pendientes() {
             <li key={clientId} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-slate-900">
+                  <p className="text-slate-900 dark:text-white">
                     {categoria.titulo} · {categoria.tipos[datos.type]}
                   </p>
-                  <p className="text-xs text-slate-500">Guardado el {formatearFecha(creadoEn)}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Guardado el {formatearFecha(creadoEn)}
+                  </p>
                 </div>
                 {estado === 'error' ? (
                   <Etiqueta color="ambar">No se pudo enviar</Etiqueta>
@@ -55,7 +62,7 @@ export function Pendientes() {
 
               {estado === 'error' && (
                 <>
-                  <p className="mt-2 text-sm text-alerta-700">{error}</p>
+                  <p className="mt-2 text-sm text-alerta-700 dark:text-red-300">{error}</p>
                   <div className="mt-3 flex gap-2">
                     <Boton variante="secundario" onClick={() => reintentar.mutate(clientId)}>
                       <RotateCw className="size-4" aria-hidden="true" />

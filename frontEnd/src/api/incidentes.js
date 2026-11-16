@@ -1,10 +1,20 @@
 /**
  * Reportes de emergencia (CU-29, CU-30, CU-31) y consulta de mis casos (CU-32).
- * DATOS DE PRUEBA: la versión real usa el backend (colecciones incidents y aid_needs).
+ * Conectado al backend real:
+ *  - Daño en vivienda y vías  -> POST /incidents/        (colección incidents)
+ *    con su foto opcional subida antes con POST /media/upload (CU-47)
+ *  - Pedir ayuda              -> POST /aid/needs         (colección aid_needs)
+ *  - Mis casos                -> GET /incidents/ + GET /aid/needs/mine (solo los propios)
+ *  - Detalle con historial    -> GET /incidents/case/{número}
+ * Las pantallas usan una forma propia del "caso"; aquí se traduce desde y hacia la API.
  */
-import { simularRed } from '@/api/mocks/simular'
+import { api, mensajeDeError } from '@/api/client'
+import { subirArchivo } from '@/api/media'
 
-/** Las tres clases de reporte y sus tipos. */
+/**
+ * Las tres clases de reporte. Cada tipo de la pantalla indica a qué tipo del backend
+ * corresponde (`api`); el detalle (p. ej. "Grietas en muros") viaja en la descripción.
+ */
 export const CATEGORIAS_REPORTE = {
   vivienda: {
     titulo: 'Daño en mi vivienda',
@@ -15,6 +25,12 @@ export const CATEGORIAS_REPORTE = {
       VIVIENDA_INCLINADA: 'Vivienda inclinada',
       OTRO_DANO: 'Otro daño',
     },
+    api: {
+      GRIETAS: 'VIVIENDA_DANADA',
+      TECHO_CAIDO: 'VIVIENDA_DANADA',
+      VIVIENDA_INCLINADA: 'VIVIENDA_DANADA',
+      OTRO_DANO: 'VIVIENDA_DANADA',
+    },
   },
   via: {
     titulo: 'Vía bloqueada o escombros',
@@ -24,6 +40,12 @@ export const CATEGORIAS_REPORTE = {
       DESLIZAMIENTO: 'Deslizamiento',
       ARBOL_CAIDO: 'Árbol caído',
       OTRO_INCIDENTE: 'Otro incidente',
+    },
+    api: {
+      VIA_BLOQUEADA: 'VIA_BLOQUEADA',
+      DESLIZAMIENTO: 'DESLIZAMIENTO',
+      ARBOL_CAIDO: 'VIA_BLOQUEADA',
+      OTRO_INCIDENTE: 'OTRO',
     },
   },
   ayuda: {
@@ -36,11 +58,43 @@ export const CATEGORIAS_REPORTE = {
       APOYO_EMOCIONAL: 'Apoyo emocional',
       OTRA_NECESIDAD: 'Otra necesidad',
     },
+    api: {
+      AGUA: 'AGUA',
+      REFUGIO: 'REFUGIO',
+      HERRAMIENTAS: 'HERRAMIENTAS',
+      APOYO_EMOCIONAL: 'OTROS',
+      OTRA_NECESIDAD: 'OTROS',
+    },
   },
 }
 
-/** Los 5 estados autorizados que ve el ciudadano (RF-24). */
+/** Nombres de los tipos del backend, para casos creados desde otra pantalla o versión. */
+const TIPOS_BACKEND = {
+  VIVIENDA_DANADA: 'Vivienda dañada',
+  DANO_ESTRUCTURAL: 'Daño estructural',
+  VIA_BLOQUEADA: 'Vía bloqueada',
+  DESLIZAMIENTO: 'Deslizamiento',
+  INUNDACION: 'Inundación',
+  OTRO: 'Otro',
+  ALIMENTOS: 'Alimentos',
+  AGUA: 'Agua',
+  HERRAMIENTAS: 'Herramientas',
+  REFUGIO: 'Refugio',
+  ROPA: 'Ropa',
+  PRIMEROS_AUXILIOS: 'Primeros auxilios',
+  OTROS: 'Otra necesidad',
+}
+
+/** Los 5 estados autorizados que ve el ciudadano (RF-24), iguales a los del backend. */
 export const ESTADOS = ['REPORTADO', 'EN_REVISION', 'ASIGNADO', 'EN_ATENCION', 'RESUELTO']
+
+/** Estados de aid_needs -> estados que ve el ciudadano. */
+const ESTADO_AYUDA = {
+  PENDIENTE: 'REPORTADO',
+  EMPAREJADO: 'ASIGNADO',
+  ENTREGADO: 'RESUELTO',
+  CANCELADO: 'RESUELTO',
+}
 
 export function nombreEstado(estado, categoria) {
   const nombres = {
@@ -55,52 +109,70 @@ export function nombreEstado(estado, categoria) {
 }
 
 export function nombreTipo(caso) {
-  return CATEGORIAS_REPORTE[caso.categoria].tipos[caso.type]
+  return (
+    CATEGORIAS_REPORTE[caso.categoria]?.tipos[caso.type] ?? TIPOS_BACKEND[caso.type] ?? caso.type
+  )
 }
 
-const hace = (horas) => new Date(Date.now() - horas * 3_600_000).toISOString()
+const PREFIJO_AYUDA = 'AY-'
+const NO_ENCONTRADO = 'No encontramos ese número entre tus casos. Revisa que esté bien escrito.'
 
-// Casos de prueba del usuario actual.
-const misCasos = [
-  {
-    caseId: 'PR-2026-00041',
-    categoria: 'via',
-    type: 'DESLIZAMIENTO',
-    description: 'Cayó tierra sobre la vía, solo pasa una moto.',
-    coordenadas: [4.8205, -75.6702],
+/** Incidente del backend -> caso de la pantalla. */
+function deIncidente(i) {
+  const vivienda = ['VIVIENDA_DANADA', 'DANO_ESTRUCTURAL'].includes(i.incident_type)
+  return {
+    id: i.id,
+    caseId: i.case_number,
+    categoria: vivienda ? 'vivienda' : 'via',
+    type: i.incident_type,
+    description: i.description,
+    coordenadas: [i.latitude, i.longitude],
     quantity: null,
-    status: 'ASIGNADO',
-    reportedAt: hace(20),
+    status: i.status,
+    reportedAt: i.reported_at ?? i.created_at,
     historial: [
-      { toStatus: 'REPORTADO', changedAt: hace(20) },
-      { toStatus: 'EN_REVISION', changedAt: hace(18) },
-      { toStatus: 'ASIGNADO', changedAt: hace(6), note: 'Cuadrilla de obras públicas en camino.' },
+      { toStatus: 'REPORTADO', changedAt: i.reported_at ?? i.created_at },
+      ...(i.history ?? []).map((h) => ({
+        toStatus: h.to_status,
+        changedAt: h.changed_at,
+        note: h.notes,
+      })),
     ],
-  },
-  {
-    caseId: 'PR-2026-00027',
-    categoria: 'ayuda',
-    type: 'AGUA',
-    description: '',
-    coordenadas: [4.7965, -75.7295],
-    quantity: 4,
-    status: 'RESUELTO',
-    reportedAt: hace(50),
-    historial: [
-      { toStatus: 'REPORTADO', changedAt: hace(50) },
-      { toStatus: 'EN_REVISION', changedAt: hace(49) },
-      { toStatus: 'ASIGNADO', changedAt: hace(40) },
-      { toStatus: 'EN_ATENCION', changedAt: hace(30) },
-      { toStatus: 'RESUELTO', changedAt: hace(26), note: 'Se entregaron 20 litros de agua.' },
-    ],
-  },
-]
+  }
+}
 
-let consecutivo = 57
+/** Solicitud de ayuda (aid_needs) -> caso de la pantalla. */
+function deAyuda(n) {
+  const tipo =
+    Object.entries(CATEGORIAS_REPORTE.ayuda.api).find(([, cat]) => cat === n.category)?.[0] ??
+    n.category
+  return {
+    id: n.id,
+    // aid_needs aún no tiene consecutivo propio (caseId): se muestra uno derivado del id.
+    caseId: `${PREFIJO_AYUDA}${n.id.slice(-6).toUpperCase()}`,
+    categoria: 'ayuda',
+    type: tipo,
+    description: n.title,
+    coordenadas: [n.latitude, n.longitude],
+    quantity: n.quantity,
+    status: ESTADO_AYUDA[n.status] ?? 'REPORTADO',
+    reportedAt: n.created_at,
+    historial: [{ toStatus: 'REPORTADO', changedAt: n.created_at }],
+  }
+}
+
+/** "Grietas en muros: la pared se partió" (el tipo exacto queda en la descripción). */
+function describir(etiqueta, texto) {
+  const detalle = texto?.trim()
+  return detalle ? `${etiqueta}: ${detalle}` : etiqueta
+}
 
 /**
  * Envía un reporte y devuelve el caso creado, con su número de seguimiento.
- * `clientId` y `reportedAt` llegan cuando el reporte se hizo sin conexión (CU-37).
+ * `clientId` y `reportedAt` llegan cuando el reporte se hizo sin conexión (CU-37): con el
+ * mismo clientId el backend devuelve el mismo caso en vez de duplicarlo.
+ * `foto` (File o Blob, opcional) se sube primero con CU-47 y viaja en `media_urls`; los
+ * reportes guardados sin conexión también la traen. Las solicitudes de ayuda no llevan foto.
  */
 export async function crearReporte({
   categoria,
@@ -108,43 +180,71 @@ export async function crearReporte({
   description,
   quantity,
   coordenadas,
+  foto = null,
   clientId = crypto.randomUUID(),
   reportedAt = new Date().toISOString(),
 }) {
-  // Versión real: api.post('/incidents', ...) o api.post('/aid-needs', ...) según la categoría.
-  // Igual que una petición real, falla si no hay conexión (sin "response", como axios).
+  // Sin conexión falla como una petición real (sin "response"): el reporte se guarda local.
   if (!navigator.onLine) throw new Error('Network Error')
 
-  // El servidor hace upsert por clientId: un reintento devuelve el mismo caso (H-07).
-  const existente = misCasos.find((c) => c.clientId === clientId)
-  if (existente) return simularRed(existente, 300)
+  const config = CATEGORIAS_REPORTE[categoria]
+  const etiqueta = config.tipos[type]
+  const [latitude, longitude] = coordenadas
 
-  consecutivo += 1
-  const ahora = new Date().toISOString()
-  const caso = {
-    caseId: `PR-2026-${String(consecutivo).padStart(5, '0')}`,
-    clientId,
-    categoria,
-    type,
-    description: description?.trim() ?? '',
-    quantity: categoria === 'ayuda' ? Number(quantity) : null,
-    coordenadas,
-    status: 'REPORTADO',
-    reportedAt, // hora en que se hizo el reporte, aunque llegue después
-    historial: [{ toStatus: 'REPORTADO', changedAt: ahora }],
+  if (categoria === 'ayuda') {
+    const { data } = await api.post('/aid/needs', {
+      title: describir(etiqueta, description),
+      category: config.api[type],
+      quantity: Number(quantity),
+      unit: 'personas',
+      priority: 'ALTA',
+      longitude,
+      latitude,
+    })
+    return deAyuda(data)
   }
-  misCasos.unshift(caso)
-  return simularRed(caso, 700)
+
+  // Si la subida falla por falta de red, el error no trae "response" y el reporte se guarda local.
+  const mediaUrls = foto ? [await subirArchivo(foto)] : []
+
+  const { data } = await api.post('/incidents/', {
+    incident_type: config.api[type],
+    severity: 'MEDIA',
+    description: describir(etiqueta, description),
+    longitude,
+    latitude,
+    media_urls: mediaUrls,
+    client_id: clientId,
+    reported_at: reportedAt,
+  })
+  return deIncidente(data)
 }
 
-export function listarMisCasos() {
-  return simularRed(misCasos)
+/** CU-32: solo los casos de la persona con sesión (el backend filtra por dueño). */
+export async function listarMisCasos() {
+  const [incidentes, ayudas] = await Promise.all([
+    api.get('/incidents/', { params: { limit: 100 } }),
+    api.get('/aid/needs/mine'),
+  ])
+  return [...incidentes.data.map(deIncidente), ...ayudas.data.map(deAyuda)].sort((a, b) =>
+    b.reportedAt.localeCompare(a.reportedAt),
+  )
 }
 
 /** Solo devuelve casos propios. El error no revela si el número existe para otra persona (E1). */
 export async function obtenerCaso(caseId) {
-  const caso = misCasos.find((c) => c.caseId === caseId.trim().toUpperCase())
-  if (!caso)
-    throw new Error('No encontramos ese número entre tus casos. Revisa que esté bien escrito.')
-  return simularRed(caso)
+  const numero = caseId.trim().toUpperCase()
+  try {
+    if (numero.startsWith(PREFIJO_AYUDA)) {
+      const { data } = await api.get('/aid/needs/mine')
+      const caso = data.map(deAyuda).find((c) => c.caseId === numero)
+      if (!caso) throw Object.assign(new Error(NO_ENCONTRADO), { noEncontrado: true })
+      return caso
+    }
+    const { data } = await api.get(`/incidents/case/${encodeURIComponent(numero)}`)
+    return deIncidente(data)
+  } catch (error) {
+    if (error.noEncontrado || error.response?.status === 404) throw new Error(NO_ENCONTRADO)
+    throw new Error(mensajeDeError(error))
+  }
 }

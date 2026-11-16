@@ -114,32 +114,32 @@ class ManageAidUseCase:
         }
         sorted_needs = sorted(needs, key=lambda n: priority_order.get(n.priority, 4))
 
+        admin_id = EntityId(command.admin_user.id)
         for need in sorted_needs:
-            compatible_offers = [
-                o
-                for o in offers
-                if o.status == AidStatus.PENDIENTE
-                and o.category == need.category
-                and o.unit == need.unit
-            ]
+            # Una necesidad puede cubrirse con varias ofertas (la más cercana primero) y una
+            # oferta puede repartirse entre varias necesidades: lo que sobra sigue disponible.
+            while need.status == AidStatus.PENDIENTE and (need.remaining_quantity or 0) > 0:
+                best_offer = None
+                min_dist = float("inf")
+                for off in offers:
+                    if (
+                        off.status != AidStatus.PENDIENTE
+                        or (off.available_quantity or 0) <= 0
+                        or off.category != need.category
+                        or off.unit != need.unit
+                    ):
+                        continue
+                    dist = _calculate_haversine(
+                        need.longitude, need.latitude, off.longitude, off.latitude
+                    )
+                    if dist <= command.max_distance_meters and dist < min_dist:
+                        min_dist = dist
+                        best_offer = off
 
-            if not compatible_offers:
-                continue
+                if best_offer is None:
+                    break
 
-            # Buscar la oferta más cercana geográficamente
-            best_offer = None
-            min_dist = float("inf")
-            for off in compatible_offers:
-                dist = _calculate_haversine(
-                    need.longitude, need.latitude, off.longitude, off.latitude
-                )
-                if dist <= command.max_distance_meters and dist < min_dist:
-                    min_dist = dist
-                    best_offer = off
-
-            if best_offer:
-                matched_qty = min(need.quantity, best_offer.quantity)
-                admin_id = EntityId(command.admin_user.id)
+                matched_qty = min(need.remaining_quantity or 0, best_offer.available_quantity or 0)
                 match = DonationMatch.create(
                     need_id=need.id,
                     offer_id=best_offer.id,
@@ -149,11 +149,30 @@ class ManageAidUseCase:
                 )
                 await self._repository.save_match(match)
 
-                need.status = AidStatus.EMPAREJADO
-                best_offer.status = AidStatus.EMPAREJADO
+                need.fulfil(matched_qty)
+                best_offer.allocate(matched_qty)
                 await self._repository.save_need(need)
                 await self._repository.save_offer(best_offer)
 
                 matches_created.append(match)
 
         return matches_created
+
+    async def list_my_offers(self, donor: User) -> list[AidOffer]:
+        """CU-33: ofertas de ayuda registradas por la persona con sesión."""
+        return await self._repository.list_offers_by_donor(EntityId(donor.id))
+
+    async def list_pending_needs(self, admin_user: User) -> list[AidNeed]:
+        """CU-42: necesidades aún sin cubrir (solo administración)."""
+        self._ensure_admin(admin_user)
+        return await self._repository.list_pending_needs()
+
+    async def list_pending_offers(self, admin_user: User) -> list[AidOffer]:
+        """CU-41: ofertas con cantidad disponible (solo administración)."""
+        self._ensure_admin(admin_user)
+        return await self._repository.list_pending_offers()
+
+    @staticmethod
+    def _ensure_admin(user: User) -> None:
+        if user.role != Role.ADMIN:
+            raise AuthorizationError("Solo administradores pueden gestionar las donaciones.")

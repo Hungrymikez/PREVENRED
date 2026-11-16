@@ -60,6 +60,19 @@ class ManageVolunteeringUseCase:
         await self._repository.save_profile(profile)
         return profile
 
+    async def get_my_profile(self, user: User) -> VolunteerProfile:
+        """CU-44: perfil de voluntario de la persona con sesión (404 si aún no se inscribe)."""
+        profile = await self._repository.get_by_user_id(EntityId(user.id))
+        if not profile:
+            raise NotFoundError("Aún no estás inscrito como voluntario.")
+        return profile
+
+    async def list_available_volunteers(self, coordinator: User) -> list[VolunteerProfile]:
+        """CU-43: los coordinadores (admin o inspector) ven a quién pueden asignar."""
+        if coordinator.role not in (Role.ADMIN, Role.INSPECTOR):
+            raise AuthorizationError("Solo coordinadores pueden consultar los voluntarios.")
+        return await self._repository.list_available()
+
     async def assign_volunteer(self, command: AssignVolunteerCommand) -> VolunteerAssignment:
         if command.coordinator.role not in (Role.ADMIN, Role.INSPECTOR):
             raise AuthorizationError("Solo coordinadores pueden asignar misiones de voluntariado.")

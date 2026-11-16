@@ -1,8 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useNavigate } from 'react-router'
-import { CATEGORIAS, CONDICIONES, MODALIDADES, publicar } from '@/api/segundavida'
+import { CATEGORIAS, CONDICIONES, MODALIDADES, publicar, UNIDADES } from '@/api/segundavida'
+import { textoDeError } from '@/api/client'
 import { Alerta } from '@/components/ui/Alerta'
 import { Boton } from '@/components/ui/Boton'
 import { Campo } from '@/components/ui/Campo'
@@ -10,12 +12,14 @@ import { Volver } from '@/components/ui/Volver'
 import { useAuth } from '@/hooks/useAuth'
 import { NOMBRES_ZONAS } from '@/utils/zonas'
 import { esquemaPublicacion } from './esquema'
+import { SelectorFotos } from './SelectorFotos'
 
-/** CU-11 · Publicar material. */
+/** CU-11 · Publicar material. Las fotos se suben primero (CU-47) y viajan en media_urls. */
 export default function Publicar() {
   const { usuario } = useAuth()
   const navegar = useNavigate()
   const queryClient = useQueryClient()
+  const [fotos, setFotos] = useState([])
 
   const {
     register,
@@ -31,6 +35,7 @@ export default function Publicar() {
       category: '',
       condition: '',
       quantity: 1,
+      unit: UNIDADES[0],
       price: '',
       // Por defecto, el barrio de su cuenta si está en la lista.
       zona: NOMBRES_ZONAS.includes(usuario.neighborhood) ? usuario.neighborhood : '',
@@ -39,7 +44,7 @@ export default function Publicar() {
   const modalidad = useWatch({ control, name: 'offerType' })
 
   const publicacion = useMutation({
-    mutationFn: (datos) => publicar(datos, usuario.full_name),
+    mutationFn: (datos) => publicar(datos, fotos),
     onSuccess: (nueva) => {
       queryClient.invalidateQueries({ queryKey: ['publicaciones'] }) // la lista se recarga
       navegar(`/segundavida/${nueva.id}`)
@@ -49,25 +54,29 @@ export default function Publicar() {
   return (
     <div className="mx-auto max-w-2xl">
       <Volver a="/segundavida">Volver a SegundaVida</Volver>
-      <h1 className="mt-4 text-2xl font-bold text-slate-900">Publicar en SegundaVida</h1>
-      <p className="mt-1 text-slate-600">
+      <h1 className="mt-4 text-2xl font-bold text-slate-900 dark:text-white">
+        Publicar en SegundaVida
+      </h1>
+      <p className="mt-1 text-slate-600 dark:text-slate-300">
         Dale una segunda vida a lo que te sobró. Solo mostramos tu barrio, nunca tu dirección.
       </p>
 
       <form
         onSubmit={handleSubmit((datos) => publicacion.mutate(datos))}
         noValidate
-        className="mt-6 space-y-4 rounded-2xl bg-white p-6 shadow-sm"
+        className="mt-6 space-y-4 rounded-2xl bg-white p-6 shadow-sm dark:bg-slate-900"
       >
-        {publicacion.error && <Alerta tipo="error">{publicacion.error.message}</Alerta>}
+        {publicacion.error && <Alerta tipo="error">{textoDeError(publicacion.error)}</Alerta>}
 
         <fieldset>
-          <legend className="mb-2 text-sm font-medium text-slate-800">¿Qué quieres hacer?</legend>
+          <legend className="mb-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+            ¿Qué quieres hacer?
+          </legend>
           <div className="grid grid-cols-3 gap-2">
             {Object.entries(MODALIDADES).map(([valor, { nombre }]) => (
               <label
                 key={valor}
-                className="cursor-pointer rounded-lg border border-slate-300 p-2 text-center text-sm font-medium has-checked:border-marca-600 has-checked:bg-marca-50 has-focus-visible:ring-2 has-focus-visible:ring-marca-600"
+                className="cursor-pointer rounded-lg border border-slate-300 p-2 text-center text-sm font-medium has-checked:border-marca-600 has-checked:bg-marca-50 has-focus-visible:ring-2 has-focus-visible:ring-marca-600 dark:border-white/20 dark:has-checked:border-amber-400 dark:has-checked:bg-amber-400/10 dark:has-focus-visible:ring-amber-400"
               >
                 <input type="radio" value={valor} className="sr-only" {...register('offerType')} />
                 {nombre}
@@ -99,8 +108,10 @@ export default function Publicar() {
             {...register('category')}
           >
             <option value="">Elige…</option>
-            {CATEGORIAS.map((c) => (
-              <option key={c}>{c}</option>
+            {Object.entries(CATEGORIAS).map(([valor, nombre]) => (
+              <option key={valor} value={valor}>
+                {nombre}
+              </option>
             ))}
           </Campo>
           <Campo
@@ -119,12 +130,18 @@ export default function Publicar() {
           <Campo
             etiqueta="Cantidad"
             type="number"
-            min="1"
-            inputMode="numeric"
+            min="0"
+            step="any"
+            inputMode="decimal"
             error={errors.quantity?.message}
             {...register('quantity')}
           />
-          {modalidad !== 'INTERCAMBIO' && (
+          <Campo como="select" etiqueta="Unidad" error={errors.unit?.message} {...register('unit')}>
+            {UNIDADES.map((u) => (
+              <option key={u}>{u}</option>
+            ))}
+          </Campo>
+          {modalidad !== 'DONACION' && (
             <Campo
               etiqueta={modalidad === 'ALQUILER' ? 'Costo por día (COP)' : 'Precio (COP)'}
               type="number"
@@ -143,7 +160,7 @@ export default function Publicar() {
           </Campo>
         </div>
 
-        <Alerta tipo="info">Pronto podrás agregar fotos a tu publicación.</Alerta>
+        <SelectorFotos fotos={fotos} onCambiar={setFotos} />
 
         <Boton type="submit" cargando={publicacion.isPending} className="w-full">
           Publicar

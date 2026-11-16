@@ -25,5 +25,22 @@ export function mensajeDeError(error) {
   if (Array.isArray(data?.detail)) return data.detail.map((d) => d.msg).join('. ')
   if (typeof data?.detail === 'string') return data.detail
   if (!error?.response) return 'No hay conexión con el servidor. Intenta de nuevo.'
+  // Sin mensaje del servidor: uno claro según el tipo de error (nunca el texto técnico).
+  const estado = error.response.status
+  if (estado === 401) return 'Tu sesión terminó. Vuelve a iniciar sesión.'
+  if (estado === 403) return 'Tu tipo de cuenta no tiene permiso para ver o hacer esto.'
+  if (estado === 404) return 'No encontramos lo que buscas.'
+  if (estado >= 500) return 'El servidor tuvo un problema. Intenta de nuevo en unos minutos.'
   return 'Ocurrió un error inesperado.'
+}
+
+/**
+ * Texto para mostrar de cualquier error: los de la API se traducen con mensajeDeError;
+ * los errores propios de la app (new Error('…')) ya traen un mensaje pensado para la persona.
+ */
+export function textoDeError(error) {
+  if (error?.response || error?.isAxiosError || error?.message === 'Network Error') {
+    return mensajeDeError(error)
+  }
+  return error?.message || mensajeDeError(error)
 }

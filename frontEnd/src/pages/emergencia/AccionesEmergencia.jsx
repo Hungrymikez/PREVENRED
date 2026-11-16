@@ -14,9 +14,12 @@ export function AccionesEmergencia() {
           <li key={clave}>
             <Link
               to={`/emergencia/reportar/${clave}`}
-              className="flex h-full items-center gap-3 rounded-2xl border-2 border-alerta-600 bg-white p-4 font-semibold text-slate-900 transition hover:bg-alerta-50 sm:flex-col sm:items-start"
+              className="flex h-full items-center gap-3 rounded-2xl border-2 border-alerta-600 bg-white p-4 font-semibold text-slate-900 transition hover:bg-alerta-50 sm:flex-col sm:items-start dark:bg-slate-900 dark:text-white dark:hover:bg-red-950/50"
             >
-              <Icono className="size-8 shrink-0 text-alerta-600" aria-hidden="true" />
+              <Icono
+                className="size-8 shrink-0 text-alerta-600 dark:text-red-400"
+                aria-hidden="true"
+              />
               <span className="flex-1">{titulo}</span>
               <ChevronRight className="size-5 text-slate-400 sm:hidden" aria-hidden="true" />
             </Link>

@@ -1,7 +1,10 @@
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+
+from prevenred.auth.application.ports import TokenPayload
+from prevenred.auth.interface.dependencies import get_current_token
 
 from .schemas import MediaUploadResponse
 
@@ -14,10 +17,26 @@ ALLOWED_TYPES = {
     "video/mp4": ".mp4",
 }
 MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB max limit
+CHUNK_SIZE_BYTES = 1024 * 1024
+
+# Carpeta local donde se guardan los archivos y ruta pública desde la que se sirven
+# (main.py la monta con StaticFiles). En producción se reemplaza por un almacenamiento externo.
+UPLOAD_DIR = Path("uploads")
+PUBLIC_URL_PREFIX = "/static/uploads"
+
+_TOO_LARGE = HTTPException(
+    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+    detail="El archivo excede el tamaño máximo permitido de 25 MB.",
+)
 
 
 @router.post("/upload", response_model=MediaUploadResponse, status_code=status.HTTP_201_CREATED)
-async def upload_file(file: UploadFile = File(...)) -> MediaUploadResponse:
+async def upload_file(
+    file: UploadFile = File(...),
+    _uploader: TokenPayload = Depends(get_current_token),
+) -> MediaUploadResponse:
+    """Sube una foto o video (exige sesión). Se copia por bloques para no cargar
+    el archivo entero en memoria y se corta en cuanto supera el límite."""
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -26,28 +45,29 @@ async def upload_file(file: UploadFile = File(...)) -> MediaUploadResponse:
                 "Formatos admitidos: JPEG, PNG, WEBP, MP4."
             ),
         )
-
-    content = await file.read()
-    size = len(content)
-    if size > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail="El archivo excede el tamaño máximo permitido de 25 MB.",
-        )
+    if file.size is not None and file.size > MAX_FILE_SIZE_BYTES:
+        raise _TOO_LARGE
 
     ext = ALLOWED_TYPES[file.content_type]
     filename = f"{uuid.uuid4().hex}{ext}"
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    file_path = UPLOAD_DIR / filename
+    partial_path = file_path.with_name(f"{filename}.part")
 
-    # Guardar localmente simulando almacenamiento seguro
-    upload_dir = Path("uploads")
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    file_path = upload_dir / filename
-    with open(file_path, "wb") as f:
-        f.write(content)
+    size = 0
+    try:
+        with open(partial_path, "wb") as f:
+            while chunk := await file.read(CHUNK_SIZE_BYTES):
+                size += len(chunk)
+                if size > MAX_FILE_SIZE_BYTES:
+                    raise _TOO_LARGE
+                f.write(chunk)
+        partial_path.replace(file_path)
+    finally:
+        partial_path.unlink(missing_ok=True)
 
-    public_url = f"/static/uploads/{filename}"
     return MediaUploadResponse(
-        url=public_url,
+        url=f"{PUBLIC_URL_PREFIX}/{filename}",
         filename=filename,
         content_type=file.content_type,
         size_bytes=size,

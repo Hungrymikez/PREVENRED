@@ -67,6 +67,14 @@ class MongoVolunteerRepository(VolunteerRepository):
         d = await self._volunteers.find_one({"_id": volunteer_id.value})
         return self._doc_to_vol(d) if d else None
 
+    async def list_available(self, limit: int = 100) -> list[VolunteerProfile]:
+        docs = (
+            await self._volunteers.find({"is_available": True})
+            .sort("created_at", -1)
+            .to_list(length=limit)
+        )
+        return [self._doc_to_vol(d) for d in docs]
+
     async def save_assignment(self, assignment: VolunteerAssignment) -> None:
         doc = {
             "_id": assignment.id.value,

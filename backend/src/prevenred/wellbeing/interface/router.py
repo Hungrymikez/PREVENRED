@@ -47,6 +47,21 @@ async def grant_consent(
     )
 
 
+@router.get("/consent/me", response_model=ConsentResponse)
+async def get_my_consent(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
+) -> ConsentResponse:
+    """CU-24: consentimiento vigente de quien consulta; 404 si no lo ha dado o lo revocó."""
+    res = await WellbeingUseCase(MongoWellbeingRepository(db)).get_my_consent(current_user)
+    return ConsentResponse(
+        user_id=res.user_id.value,
+        terms_version=res.terms_version,
+        consented_at=res.consented_at,
+        is_revoked=res.is_revoked,
+    )
+
+
 @router.post(
     "/surveys", response_model=SurveySubmissionResponse, status_code=status.HTTP_201_CREATED
 )
@@ -77,12 +92,14 @@ async def submit_survey(
 
 @router.get("/indicators", response_model=list[CommunityIndicatorResponse])
 async def get_indicators(
+    current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
 ) -> list[CommunityIndicatorResponse]:
+    """CU-26: indicadores agregados por barrio. Solo Administrador."""
     repo = MongoWellbeingRepository(db)
     use_case = WellbeingUseCase(repo)
 
-    indicators = await use_case.get_community_indicators()
+    indicators = await use_case.get_community_indicators(current_user)
     return [
         CommunityIndicatorResponse(
             neighborhood=item["neighborhood"],

@@ -6,8 +6,10 @@ import { AccionesEmergencia } from './AccionesEmergencia'
 export default function Emergencia() {
   return (
     <>
-      <h1 className="text-2xl font-bold text-slate-900">¿Qué quieres reportar?</h1>
-      <p className="mt-1 text-slate-600">Tu reporte llega a los coordinadores de la emergencia.</p>
+      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">¿Qué quieres reportar?</h1>
+      <p className="mt-1 text-slate-600 dark:text-slate-300">
+        Tu reporte llega a los coordinadores de la emergencia.
+      </p>
 
       <div className="mt-6">
         <AccionesEmergencia />
@@ -15,7 +17,7 @@ export default function Emergencia() {
 
       <Link
         to="/emergencia/casos"
-        className="mt-6 inline-flex items-center gap-2 font-medium text-marca-700 hover:underline"
+        className="mt-6 inline-flex items-center gap-2 font-medium text-marca-700 hover:underline dark:text-amber-400"
       >
         <ClipboardList className="size-5" aria-hidden="true" />
         Ver el estado de mis casos

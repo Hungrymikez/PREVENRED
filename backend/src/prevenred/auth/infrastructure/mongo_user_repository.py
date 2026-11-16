@@ -273,3 +273,10 @@ class MongoUserRepository(UserRepository):
         No pisa campos que escriben otros contextos (p. ej. `verified` o `phone`).
         """
         self._users.update_one(_id_query(user.id), {"$set": _mutable_fields(user)})
+
+    def list_by_role(self, role: Role) -> list[User]:
+        """Busca por los códigos de PrevenRED2 (INSPECTOR…) y por el valor del dominio."""
+        codes = [code for code, value in _FROM_DB_ROLE.items() if value == role] + [role.value]
+        query = {"$or": [{"roles": {"$in": codes}}, {"role": {"$in": codes}}]}
+        users = [_to_entity(d) for d in self._users.find(query)]
+        return sorted((u for u in users if u.is_active), key=lambda u: u.full_name)

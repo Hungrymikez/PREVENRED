@@ -29,6 +29,16 @@ class MaterialCondition(StrEnum):
     USADO = "USADO"
 
 
+def public_display_name(full_name: str) -> str:
+    """Primer nombre e inicial del primer apellido: "Sara Salas Gómez" -> "Sara S."."""
+    parts = (full_name or "").split()
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    return f"{parts[0]} {parts[1][0].upper()}."
+
+
 @dataclass
 class Material(Entity):
     title: str
@@ -45,6 +55,9 @@ class Material(Entity):
     media_urls: list[str]
     is_active: bool
     created_at: datetime
+    # Nombre visible del dueño ("Sara S."): copia al publicar para no exponer el nombre completo
+    # en la búsqueda pública (RN-05, minimización de datos personales).
+    owner_name: str = ""
 
     @classmethod
     def create(
@@ -61,6 +74,7 @@ class Material(Entity):
         owner_id: EntityId,
         price: float | None = None,
         media_urls: list[str] | None = None,
+        owner_name: str = "",
     ) -> "Material":
         clean_title = title.strip() if title else ""
         if len(clean_title) < 3:
@@ -90,4 +104,5 @@ class Material(Entity):
             media_urls=media_urls or [],
             is_active=True,
             created_at=datetime.now(UTC),
+            owner_name=public_display_name(owner_name),
         )

@@ -2,10 +2,14 @@
 
 import pytest
 
+from prevenred.auth.domain.role import Role
 from prevenred.shared.domain.errors import DomainValidationError
 from prevenred.shared.domain.ids import EntityId
 from prevenred.wellbeing.domain.consent import WellbeingConsent
 from prevenred.wellbeing.domain.survey import WellbeingSurvey
+from prevenred.wellbeing.infrastructure.mongo_wellbeing_repository import (
+    MongoWellbeingRepository,
+)
 
 BASE = "/api/v1/wellbeing"
 
@@ -104,6 +108,24 @@ def test_pii_se_enmascara_antes_de_persistir(api, act_as, make_user, motor_db):
     )
 
 
+def test_encuesta_no_guarda_el_usuario(api, act_as, make_user, motor_db):
+    """RN-03: la respuesta queda desvinculada de la cuenta."""
+    user = act_as(make_user())
+    api.post(f"{BASE}/consent", json={})
+    assert _survey(api, text="no puedo más").status_code == 201
+    stored = motor_db["wellbeing_surveys"]._col.find_one()
+    assert "user_id" not in stored
+    assert user.id not in {str(v) for v in stored.values()}
+
+
+@pytest.mark.asyncio
+async def test_create_indexes_borra_el_usuario_de_encuestas_antiguas(motor_db):
+    surveys = motor_db["wellbeing_surveys"]._col
+    surveys.insert_one({"_id": "s1", "user_id": "u1", "neighborhood": "Cuba", "mood_score": 3})
+    await MongoWellbeingRepository(motor_db).create_indexes()
+    assert surveys.find_one({"_id": "s1"}) == {"_id": "s1", "neighborhood": "Cuba", "mood_score": 3}
+
+
 # ---------- Boundary testing de la escala de ánimo y el barrio ----------
 
 
@@ -117,13 +139,13 @@ def test_limites_de_escala_de_animo_en_api(api, act_as, make_user, mood, status)
 @pytest.mark.parametrize("mood", [0, 6])
 def test_limites_de_escala_de_animo_en_dominio(mood):
     with pytest.raises(DomainValidationError):
-        WellbeingSurvey.create(user_id=EntityId.generate(), neighborhood="Cuba", mood_score=mood)
+        WellbeingSurvey.create(neighborhood="Cuba", mood_score=mood)
 
 
 @pytest.mark.parametrize("neighborhood", ["", " ", "A "])
 def test_barrio_demasiado_corto_en_dominio(neighborhood):
     with pytest.raises(DomainValidationError):
-        WellbeingSurvey.create(user_id=EntityId.generate(), neighborhood=neighborhood, mood_score=3)
+        WellbeingSurvey.create(neighborhood=neighborhood, mood_score=3)
 
 
 def test_consentimiento_sin_version_es_invalido():
@@ -145,11 +167,50 @@ def test_indicadores_respetan_umbral_minimo_de_tres_muestras(api, act_as, make_u
     for mood, text in ((1, "no quiero vivir"), (4, ""), (5, "")):  # exactamente 3: se publica
         responder("Cuba", mood, text)
 
+    act_as(make_user(Role.ADMIN))
     r = api.get(f"{BASE}/indicators")
     assert r.status_code == 200
     assert r.json() == [
         {"neighborhood": "Cuba", "sample_count": 3, "average_mood": 3.33, "crisis_alerts": 1}
     ]
+
+
+@pytest.mark.parametrize("role", [Role.CIUDADANO, Role.INSPECTOR, Role.TECNICO])
+def test_indicadores_solo_para_administradores(api, act_as, make_user, role):
+    """CU-26: los indicadores comunitarios son del tablero del Administrador."""
+    act_as(make_user(role))
+    r = api.get(f"{BASE}/indicators")
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "forbidden"
+
+
+# ---------- Consultar el consentimiento propio (CU-24) ----------
+
+
+def test_consentimiento_propio_responde_404_si_no_existe(api, act_as, make_user):
+    act_as(make_user())
+    r = api.get(f"{BASE}/consent/me")
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "not_found"
+
+
+def test_consentimiento_propio_devuelve_el_vigente(api, act_as, make_user):
+    user = act_as(make_user())
+    api.post(f"{BASE}/consent", json={"terms_version": "v1.0"})
+    r = api.get(f"{BASE}/consent/me")
+    assert r.status_code == 200
+    assert r.json()["user_id"] == user.id
+    assert r.json()["terms_version"] == "v1.0"
+    assert r.json()["is_revoked"] is False
+
+
+def test_consentimiento_propio_revocado_responde_404(api, act_as, make_user, motor_db):
+    user = act_as(make_user())
+    api.post(f"{BASE}/consent", json={})
+    motor_db["wellbeing_consents"]._col.update_one(
+        {"user_id": user.id}, {"$set": {"is_revoked": True}}
+    )
+    assert api.get(f"{BASE}/consent/me").status_code == 404
 
 
 def test_lineas_de_ayuda_son_publicas(api):

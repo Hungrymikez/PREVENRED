@@ -70,27 +70,37 @@ export default function Registro() {
 
   return (
     <>
-      <h1 className="text-2xl font-bold text-slate-900">Crea tu cuenta</h1>
-      <p className="mt-1 text-sm text-slate-600">Únete a la red de prevención de Pereira.</p>
+      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Crea tu cuenta</h1>
+      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+        Únete a la red de prevención de Pereira.
+      </p>
 
       <form onSubmit={handleSubmit(enviar)} noValidate className="mt-6 space-y-4">
         {errorServidor && <Alerta tipo="error">{errorServidor}</Alerta>}
 
         <fieldset>
-          <legend className="mb-2 text-sm font-medium text-slate-800">Tipo de cuenta</legend>
+          <legend className="mb-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+            Tipo de cuenta
+          </legend>
           <div className="grid gap-2 sm:grid-cols-2">
             {TIPOS_DE_CUENTA.map((tipo) => (
               <label
                 key={tipo.valor}
-                className="cursor-pointer rounded-lg border border-slate-300 p-3 has-checked:border-marca-600 has-checked:bg-marca-50 has-focus-visible:ring-2 has-focus-visible:ring-marca-600"
+                className="cursor-pointer rounded-lg border border-slate-300 p-3 has-checked:border-marca-600 has-checked:bg-marca-50 has-focus-visible:ring-2 has-focus-visible:ring-marca-600 dark:border-white/20 dark:has-checked:border-amber-400 dark:has-checked:bg-amber-400/10 dark:has-focus-visible:ring-amber-400"
               >
                 <input type="radio" value={tipo.valor} className="sr-only" {...register('role')} />
-                <span className="block font-medium text-slate-900">{tipo.titulo}</span>
-                <span className="block text-xs text-slate-600">{tipo.descripcion}</span>
+                <span className="block font-medium text-slate-900 dark:text-white">
+                  {tipo.titulo}
+                </span>
+                <span className="block text-xs text-slate-600 dark:text-slate-300">
+                  {tipo.descripcion}
+                </span>
               </label>
             ))}
           </div>
-          {errors.role && <p className="mt-1 text-sm text-alerta-700">{errors.role.message}</p>}
+          {errors.role && (
+            <p className="mt-1 text-sm text-alerta-700 dark:text-red-300">{errors.role.message}</p>
+          )}
         </fieldset>
 
         <Campo
@@ -145,17 +155,19 @@ export default function Registro() {
         )}
 
         <div>
-          <label className="flex items-start gap-2 text-sm text-slate-700">
+          <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
             <input
               type="checkbox"
-              className="mt-0.5 size-4 accent-marca-600"
+              className="mt-0.5 size-4 accent-marca-600 dark:accent-amber-500"
               aria-invalid={errors.accepted_terms ? 'true' : 'false'}
               {...register('accepted_terms')}
             />
             Acepto el aviso de privacidad y el tratamiento de mis datos personales.
           </label>
           {errors.accepted_terms && (
-            <p className="mt-1 text-sm text-alerta-700">{errors.accepted_terms.message}</p>
+            <p className="mt-1 text-sm text-alerta-700 dark:text-red-300">
+              {errors.accepted_terms.message}
+            </p>
           )}
         </div>
 
@@ -164,9 +176,12 @@ export default function Registro() {
         </Boton>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-600">
+      <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-300">
         ¿Ya tienes cuenta?{' '}
-        <Link to="/login" className="font-medium text-marca-700 hover:underline">
+        <Link
+          to="/login"
+          className="font-medium text-marca-700 hover:underline dark:text-amber-400"
+        >
           Inicia sesión
         </Link>
       </p>

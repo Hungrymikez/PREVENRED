@@ -20,6 +20,12 @@ class MongoWellbeingRepository(WellbeingRepository):
         await self._consents.create_index("user_id", unique=True)
         await self._surveys.create_index("neighborhood")
         await self._surveys.create_index("created_at")
+        await self._drop_survey_user_links()
+
+    async def _drop_survey_user_links(self) -> None:
+        """RN-03: borra el `user_id` que versiones anteriores guardaban en cada encuesta.
+        Es idempotente: cuando ya no queda ninguno, no modifica nada."""
+        await self._surveys.update_many({"user_id": {"$exists": True}}, {"$unset": {"user_id": ""}})
 
     async def save_consent(self, consent: WellbeingConsent) -> None:
         # Un consentimiento por usuario. El _id es inmutable en MongoDB: solo se fija al
@@ -50,10 +56,8 @@ class MongoWellbeingRepository(WellbeingRepository):
 
     async def save_survey(self, survey: WellbeingSurvey) -> None:
         survey_id = survey.id.value
-        user_id = survey.user_id.value
         doc = {
             "_id": survey_id,
-            "user_id": user_id,
             "neighborhood": survey.neighborhood,
             "mood_score": survey.mood_score,
             "sanitized_text": survey.sanitized_text,

@@ -2,23 +2,37 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { MapPin, Plus } from 'lucide-react'
 import { Link } from 'react-router'
 import { Marker, Popup } from 'react-leaflet'
-import { CATEGORIAS, CONDICIONES, listarPublicaciones, MODALIDADES } from '@/api/segundavida'
+import {
+  CATEGORIAS,
+  CONDICIONES,
+  listarPublicaciones,
+  MODALIDADES,
+  origenDeBusqueda,
+} from '@/api/segundavida'
 import { Mapa } from '@/components/mapa/Mapa'
 import { SelectorVista } from '@/components/SelectorVista'
 import { Campo } from '@/components/ui/Campo'
 import { Cargando, ErrorAlCargar, SinResultados } from '@/components/ui/Estados'
 import { Etiqueta } from '@/components/ui/Etiqueta'
+import { useAuth } from '@/hooks/useAuth'
 import { useFiltrosUrl } from '@/hooks/useFiltrosUrl'
 import { formatearDistancia } from '@/utils/distancia'
-import { IconoCategoria } from './IconoCategoria'
+import { NOMBRES_ZONAS } from '@/utils/zonas'
+import { Portada } from './Portada'
 import { textoPrecio } from './precio'
 
-/** CU-12 · Buscar materiales por ubicación. */
+/**
+ * CU-12 · Buscar materiales por ubicación. El backend busca alrededor de un punto: el barrio
+ * elegido en "Cerca de" (por defecto, el de la cuenta; si no está en la lista, el Centro).
+ */
 export default function SegundaVida() {
+  const { usuario } = useAuth()
   const [filtros, cambiar] = useFiltrosUrl()
   const { vista = 'lista', ...resto } = filtros
   const modalidad = filtros.modalidad ?? 'VENTA'
-  const consulta = { ...resto, modalidad }
+  const barrioCuenta = NOMBRES_ZONAS.includes(usuario?.neighborhood) ? usuario.neighborhood : ''
+  const cerca = filtros.cerca ?? (barrioCuenta || 'Centro')
+  const consulta = { ...resto, modalidad, cerca }
 
   const {
     data: publicaciones,
@@ -34,12 +48,14 @@ export default function SegundaVida() {
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">SegundaVida Pereira</h1>
-          <p className="text-slate-600">Materiales y herramientas de tus vecinos.</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">SegundaVida Pereira</h1>
+          <p className="text-slate-600 dark:text-slate-300">
+            Materiales y herramientas de tus vecinos.
+          </p>
         </div>
         <Link
           to="/segundavida/publicar"
-          className="inline-flex items-center gap-2 rounded-lg bg-marca-600 px-4 py-2.5 font-medium text-white hover:bg-marca-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-marca-600 px-4 py-2.5 font-medium text-white hover:bg-marca-700 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-400"
         >
           <Plus className="size-4" aria-hidden="true" />
           Publicar
@@ -48,7 +64,7 @@ export default function SegundaVida() {
 
       {/* Pestañas Comprar / Intercambiar / Alquilar */}
       <div
-        className="mt-5 flex gap-1 border-b border-slate-200"
+        className="mt-5 flex gap-1 border-b border-slate-200 dark:border-white/10"
         role="group"
         aria-label="Modalidad"
       >
@@ -58,7 +74,7 @@ export default function SegundaVida() {
             type="button"
             aria-pressed={modalidad === valor}
             onClick={() => cambiar('modalidad', valor)}
-            className="-mb-px border-b-2 border-transparent px-4 py-2 font-medium text-slate-600 hover:text-slate-900 aria-pressed:border-marca-600 aria-pressed:text-marca-700"
+            className="-mb-px border-b-2 border-transparent px-4 py-2 font-medium text-slate-600 hover:text-slate-900 aria-pressed:border-marca-600 aria-pressed:text-marca-700 dark:text-slate-300 dark:hover:text-white dark:aria-pressed:border-amber-400 dark:aria-pressed:text-amber-400"
           >
             {pestana}
           </button>
@@ -66,7 +82,7 @@ export default function SegundaVida() {
       </div>
 
       {/* Filtros */}
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Campo
           etiqueta="Buscar"
           type="search"
@@ -81,8 +97,10 @@ export default function SegundaVida() {
           onChange={(e) => cambiar('categoria', e.target.value)}
         >
           <option value="">Todas</option>
-          {CATEGORIAS.map((c) => (
-            <option key={c}>{c}</option>
+          {Object.entries(CATEGORIAS).map(([valor, nombre]) => (
+            <option key={valor} value={valor}>
+              {nombre}
+            </option>
           ))}
         </Campo>
         <Campo
@@ -98,7 +116,7 @@ export default function SegundaVida() {
             </option>
           ))}
         </Campo>
-        {modalidad !== 'INTERCAMBIO' && (
+        {modalidad !== 'DONACION' && (
           <Campo
             etiqueta={modalidad === 'ALQUILER' ? 'Precio máximo por día' : 'Precio máximo'}
             type="number"
@@ -110,10 +128,20 @@ export default function SegundaVida() {
             onChange={(e) => cambiar('precioMax', e.target.value)}
           />
         )}
+        <Campo
+          como="select"
+          etiqueta="Cerca de"
+          value={cerca}
+          onChange={(e) => cambiar('cerca', e.target.value)}
+        >
+          {NOMBRES_ZONAS.map((z) => (
+            <option key={z}>{z}</option>
+          ))}
+        </Campo>
       </div>
 
       <div className="mt-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-slate-600" aria-live="polite">
+        <p className="text-sm text-slate-600 dark:text-slate-300" aria-live="polite">
           {publicaciones && `${publicaciones.length} publicaciones · más cercanas primero`}
         </p>
         <SelectorVista vista={vista} onCambiar={(v) => cambiar('vista', v)} />
@@ -127,7 +155,7 @@ export default function SegundaVida() {
         ) : publicaciones.length === 0 ? (
           <SinResultados>Prueba quitando filtros o buscando en otra pestaña.</SinResultados>
         ) : vista === 'mapa' ? (
-          <Mapa className="h-[28rem]">
+          <Mapa centro={origenDeBusqueda(cerca)} className="h-[28rem]">
             {publicaciones.map((p) => (
               <Marker key={p.id} position={p.coordenadas}>
                 <Popup>
@@ -158,16 +186,16 @@ function TarjetaPublicacion({ publicacion: p }) {
   return (
     <Link
       to={`/segundavida/${p.id}`}
-      className="block h-full rounded-xl border border-slate-200 bg-white p-3 transition hover:border-marca-600 hover:shadow-sm"
+      className="block h-full rounded-xl border border-slate-200 bg-white p-3 transition hover:border-marca-600 hover:shadow-sm dark:border-white/10 dark:bg-slate-900 dark:hover:border-amber-400"
     >
-      <IconoCategoria categoria={p.category} />
+      <Portada publicacion={p} />
       <div className="mt-3 flex flex-wrap gap-1">
-        <Etiqueta color="azul">{p.category}</Etiqueta>
+        <Etiqueta color="azul">{CATEGORIAS[p.category] ?? p.category}</Etiqueta>
         <Etiqueta>{CONDICIONES[p.condition]}</Etiqueta>
       </div>
-      <h2 className="mt-2 font-semibold text-slate-900">{p.title}</h2>
-      <p className="mt-1 text-lg font-bold text-marca-700">{textoPrecio(p)}</p>
-      <p className="mt-1 flex items-center gap-1 text-sm text-slate-600">
+      <h2 className="mt-2 font-semibold text-slate-900 dark:text-white">{p.title}</h2>
+      <p className="mt-1 text-lg font-bold text-marca-700 dark:text-amber-400">{textoPrecio(p)}</p>
+      <p className="mt-1 flex items-center gap-1 text-sm text-slate-600 dark:text-slate-300">
         <MapPin className="size-4" aria-hidden="true" />
         {p.zona} · {formatearDistancia(p.distanciaKm)}
       </p>

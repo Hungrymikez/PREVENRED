@@ -42,6 +42,7 @@ class MongoMaterialRepository(MaterialRepository):
                 "coordinates": [material.longitude, material.latitude],
             },
             "owner_id": material.owner_id.value,
+            "owner_name": material.owner_name,
             "media_urls": material.media_urls,
             "is_active": material.is_active,
             "created_at": material.created_at,
@@ -65,6 +66,7 @@ class MongoMaterialRepository(MaterialRepository):
             media_urls=doc.get("media_urls", []),
             is_active=bool(doc.get("is_active", True)),
             created_at=doc["created_at"],
+            owner_name=doc.get("owner_name", ""),
         )
 
     async def save(self, material: Material) -> None:

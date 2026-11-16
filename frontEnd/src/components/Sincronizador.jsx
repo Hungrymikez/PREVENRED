@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { CloudOff, RefreshCw, TriangleAlert } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router'
+import { useAuth } from '@/hooks/useAuth'
 import { useConexion } from '@/hooks/useConexion'
 import { usePendientes } from '@/hooks/usePendientes'
 import { sincronizarPendientes } from '@/offline/sincronizar'
@@ -15,25 +16,32 @@ const REINTENTO_MS = 30_000
 export function Sincronizador() {
   const enLinea = useConexion()
   const queryClient = useQueryClient()
+  const usuarioId = useAuth().usuario?.id
+  // Siempre el usuario actual, para cortar un envío en curso si la sesión cambia.
+  const usuarioActual = useRef(usuarioId)
+  useEffect(() => {
+    usuarioActual.current = usuarioId
+  }, [usuarioId])
   const { data: pendientes = [] } = usePendientes()
   const porEnviar = pendientes.filter((p) => p.estado === 'pendiente').length
   const conError = pendientes.length - porEnviar
 
   useEffect(() => {
-    if (!enLinea || porEnviar === 0) return undefined
+    if (!enLinea || !usuarioId || porEnviar === 0) return undefined
+    const sigueActivo = () => usuarioActual.current === usuarioId
     const sincronizar = () =>
-      sincronizarPendientes().then(() => {
+      sincronizarPendientes(usuarioId, { sigueActivo }).then(() => {
         queryClient.invalidateQueries({ queryKey: ['pendientes'] })
         queryClient.invalidateQueries({ queryKey: ['mis-casos'] })
       })
     sincronizar()
     const id = setInterval(sincronizar, REINTENTO_MS)
     return () => clearInterval(id)
-  }, [enLinea, porEnviar, queryClient])
+  }, [enLinea, usuarioId, porEnviar, queryClient])
 
   if (!enLinea) {
     return (
-      <Aviso Icono={CloudOff} estilo="bg-amber-100 text-amber-950">
+      <Aviso Icono={CloudOff} estilo="bg-amber-100 dark:bg-amber-400/15 text-amber-950">
         <strong>Sin conexión.</strong> Tus reportes se guardan en este celular y se envían solos al
         volver la señal.
         {porEnviar > 0 && ` Pendientes: ${porEnviar}.`}
@@ -42,14 +50,21 @@ export function Sincronizador() {
   }
   if (porEnviar > 0) {
     return (
-      <Aviso Icono={RefreshCw} estilo="bg-marca-50 text-marca-900" girando>
+      <Aviso
+        Icono={RefreshCw}
+        estilo="bg-marca-50 dark:bg-amber-400/10 text-marca-900 dark:text-amber-200"
+        girando
+      >
         Enviando {porEnviar === 1 ? '1 reporte guardado' : `${porEnviar} reportes guardados`}…
       </Aviso>
     )
   }
   if (conError > 0) {
     return (
-      <Aviso Icono={TriangleAlert} estilo="bg-alerta-50 text-alerta-700">
+      <Aviso
+        Icono={TriangleAlert}
+        estilo="bg-alerta-50 dark:bg-red-950/50 text-alerta-700 dark:text-red-300"
+      >
         {conError === 1
           ? '1 reporte no se pudo enviar.'
           : `${conError} reportes no se pudieron enviar.`}{' '}

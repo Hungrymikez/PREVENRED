@@ -1,9 +1,21 @@
 import { CircleAlert, CircleCheck, Info } from 'lucide-react'
 
 const TIPOS = {
-  error: { estilo: 'border-alerta-600 bg-alerta-50 text-alerta-700', Icono: CircleAlert },
-  exito: { estilo: 'border-green-600 bg-green-50 text-green-800', Icono: CircleCheck },
-  info: { estilo: 'border-marca-600 bg-marca-50 text-marca-900', Icono: Info },
+  error: {
+    estilo:
+      'border-alerta-600 bg-alerta-50 text-alerta-700 dark:border-red-400 dark:bg-red-950/60 dark:text-red-200',
+    Icono: CircleAlert,
+  },
+  exito: {
+    estilo:
+      'border-green-600 bg-green-50 text-green-800 dark:border-green-400 dark:bg-green-950/60 dark:text-green-200',
+    Icono: CircleCheck,
+  },
+  info: {
+    estilo:
+      'border-marca-600 bg-marca-50 text-marca-900 dark:border-sky-400 dark:bg-sky-950/60 dark:text-sky-100',
+    Icono: Info,
+  },
 }
 
 /** Mensaje destacado. tipo: "error" | "exito" | "info". */

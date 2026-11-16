@@ -6,6 +6,7 @@ from pymongo.database import Database
 from prevenred.auth.application.ports import TokenPayload
 from prevenred.auth.domain.role import Role
 from prevenred.auth.interface.dependencies import require_roles
+from prevenred.fieldwork.application.list_inspections import ListInspections
 from prevenred.fieldwork.application.submit_inspection import SubmitInspection
 from prevenred.fieldwork.domain.repositories import FieldworkRepository
 from prevenred.fieldwork.infrastructure.mongo_fieldwork_repository import (
@@ -29,6 +30,12 @@ def get_submit_inspection(
     events: EventBus = Depends(get_event_bus),
 ) -> SubmitInspection:
     return SubmitInspection(repo, events)
+
+
+def get_list_inspections(
+    repo: FieldworkRepository = Depends(get_fieldwork_repository),
+) -> ListInspections:
+    return ListInspections(repo)
 
 
 require_field_staff = require_roles(Role.INSPECTOR, Role.ADMINISTRADOR)

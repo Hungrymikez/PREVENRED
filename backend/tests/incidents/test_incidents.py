@@ -40,11 +40,26 @@ class InMemoryIncidentRepository(IncidentRepository):
     def get_by_id(self, incident_id: str) -> Incident | None:
         return self.items.get(incident_id)
 
-    def list_recent(self, status=None, limit=50) -> list[Incident]:
+    def list_recent(self, status=None, limit=50, reported_by=None) -> list[Incident]:
         res = list(self.items.values())
         if status:
             res = [i for i in res if i.status == status]
+        if reported_by is not None:
+            res = [i for i in res if i.reported_by == reported_by]
         return res[:limit]
+
+    def get_by_client_id(self, reported_by, client_id):
+        return next(
+            (
+                i
+                for i in self.items.values()
+                if i.client_id == client_id and i.reported_by == reported_by
+            ),
+            None,
+        )
+
+    def get_by_case_number(self, case_number):
+        return next((i for i in self.items.values() if i.case_number == case_number), None)
 
 
 def _citizen() -> TokenPayload:
@@ -112,6 +127,7 @@ def test_update_incident_status_permissions() -> None:
         latitude=4.80,
         reported_by=citizen.user_id,
     )
+    incident.assigned_to = inspector.user_id  # el inspector solo gestiona sus casos asignados
     repo.save(incident)
     use_case = UpdateIncidentStatus(repo, MagicMock())
 
@@ -218,9 +234,9 @@ def test_api_report_and_list_as_citizen(client) -> None:
     assert data["case_number"].startswith("INC-")
     assert data["status"] == "REPORTADO"
 
-    listed = client.get("/api/v1/incidents/")
+    listed = client.get("/api/v1/incidents/", headers={"Authorization": f"Bearer {token}"})
     assert listed.status_code == 200
-    assert len(listed.json()) >= 1
+    assert [i["id"] for i in listed.json()] == [data["id"]]
 
 
 def test_api_consecutive_incident_reports_generate_unique_case_numbers(client) -> None:
@@ -264,7 +280,8 @@ def test_api_update_status_as_inspector(client) -> None:
     tokens = JwtTokenService(get_settings())
     citizen_id = new_id()
     citizen_jwt = tokens.issue(citizen_id, Role.CIUDADANO)
-    inspector_jwt = tokens.issue(new_id(), Role.INSPECTOR)
+    # Sin asignación previa, quien gestiona el caso es el Administrador.
+    inspector_jwt = tokens.issue(new_id(), Role.ADMINISTRADOR)
 
     created = client.post(
         "/api/v1/incidents/",
@@ -293,3 +310,164 @@ def test_api_update_status_as_inspector(client) -> None:
     )
     assert updated.status_code == 200
     assert updated.json()["status"] == "EN_ATENCION"
+
+
+def _report(client, jwt: str, description: str) -> dict:
+    response = client.post(
+        "/api/v1/incidents/",
+        headers={"Authorization": f"Bearer {jwt}"},
+        json={
+            "incident_type": "INUNDACION",
+            "severity": "MEDIA",
+            "description": description,
+            "longitude": -75.69,
+            "latitude": 4.81,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_api_list_requires_auth(client) -> None:
+    """Los reportes llevan datos personales: sin sesión no se listan."""
+    assert client.get("/api/v1/incidents/").status_code == 401
+
+
+def test_api_citizen_only_lists_own_incidents_and_staff_lists_all(client) -> None:
+    tokens = JwtTokenService(get_settings())
+    ana = tokens.issue(new_id(), Role.CIUDADANO)
+    beto = tokens.issue(new_id(), Role.CIUDADANO)
+    inspector = tokens.issue(new_id(), Role.INSPECTOR)
+    admin = tokens.issue(new_id(), Role.ADMINISTRADOR)
+
+    de_ana = _report(client, ana, "Agua entrando a la casa de Ana")
+    de_beto = _report(client, beto, "Agua entrando a la casa de Beto")
+
+    def ids(jwt: str) -> set[str]:
+        response = client.get("/api/v1/incidents/", headers={"Authorization": f"Bearer {jwt}"})
+        assert response.status_code == 200
+        return {i["id"] for i in response.json()}
+
+    assert ids(ana) == {de_ana["id"]}
+    assert ids(beto) == {de_beto["id"]}
+    assert ids(inspector) == ids(admin) == {de_ana["id"], de_beto["id"]}
+
+
+def _body(**extra) -> dict:
+    return {
+        "incident_type": "VIVIENDA_DANADA",
+        "severity": "MEDIA",
+        "description": "Grietas en muros: la pared de la cocina se partió",
+        "longitude": -75.69,
+        "latitude": 4.81,
+        **extra,
+    }
+
+
+def test_api_reintento_con_el_mismo_client_id_no_duplica(client) -> None:
+    """CU-37 / H-07: el celular reintenta y el servidor devuelve el mismo caso."""
+    jwt = JwtTokenService(get_settings()).issue(new_id(), Role.CIUDADANO)
+    headers = {"Authorization": f"Bearer {jwt}"}
+    body = _body(client_id="9b1f8c2e-celular-1", reported_at="2026-11-16T08:00:00Z")
+
+    primero = client.post("/api/v1/incidents/", headers=headers, json=body)
+    segundo = client.post("/api/v1/incidents/", headers=headers, json=body)
+
+    assert primero.status_code == segundo.status_code == 201
+    assert primero.json()["id"] == segundo.json()["id"]
+    assert primero.json()["reported_at"].startswith("2026-11-16T08:00:00")
+    listado = client.get("/api/v1/incidents/", headers=headers).json()
+    assert len(listado) == 1
+
+
+def test_api_consulta_por_numero_de_caso_respeta_al_dueno(client) -> None:
+    tokens = JwtTokenService(get_settings())
+    ana = {"Authorization": f"Bearer {tokens.issue(new_id(), Role.CIUDADANO)}"}
+    beto = {"Authorization": f"Bearer {tokens.issue(new_id(), Role.CIUDADANO)}"}
+    inspector = {"Authorization": f"Bearer {tokens.issue(new_id(), Role.INSPECTOR)}"}
+    admin = {"Authorization": f"Bearer {tokens.issue(new_id(), Role.ADMINISTRADOR)}"}
+
+    caso = client.post("/api/v1/incidents/", headers=ana, json=_body()).json()
+    client.patch(
+        f"/api/v1/incidents/{caso['id']}/status",
+        headers=admin,
+        json={"new_status": "EN_REVISION", "notes": "Revisando"},
+    )
+    url = f"/api/v1/incidents/case/{caso['case_number'].lower()}"
+
+    propio = client.get(url, headers=ana)
+    assert propio.status_code == 200
+    assert propio.json()["status"] == "EN_REVISION"
+    assert propio.json()["history"][0] == {
+        "from_status": "REPORTADO",
+        "to_status": "EN_REVISION",
+        "changed_at": propio.json()["history"][0]["changed_at"],
+        "notes": "Revisando",
+    }
+    # Otra persona no puede saber si el caso existe (E1).
+    assert client.get(url, headers=beto).status_code == 404
+    assert client.get(url, headers=inspector).status_code == 200
+
+
+# ---------- CU-39: asignación de casos ----------
+
+
+def _cuenta(db, make_user, rol: Role) -> tuple[str, dict]:
+    """Crea una cuenta real en la base (para validar el rol al asignar) y su encabezado."""
+    from prevenred.auth.infrastructure.mongo_user_repository import MongoUserRepository
+
+    user = make_user(rol)
+    MongoUserRepository(db).add(user)
+    jwt = JwtTokenService(get_settings()).issue(user.id, rol)
+    return user.id, {"Authorization": f"Bearer {jwt}"}
+
+
+def test_admin_asigna_y_solo_el_inspector_asignado_gestiona(client, db, make_user) -> None:
+    _, ciudadano = _cuenta(db, make_user, Role.CIUDADANO)
+    _, admin = _cuenta(db, make_user, Role.ADMINISTRADOR)
+    ana_id, ana = _cuenta(db, make_user, Role.INSPECTOR)
+    _, beto = _cuenta(db, make_user, Role.INSPECTOR)
+    caso = client.post("/api/v1/incidents/", headers=ciudadano, json=_body()).json()
+    base = f"/api/v1/incidents/{caso['id']}"
+
+    # Un inspector no puede asignar.
+    assert (
+        client.patch(f"{base}/assign", headers=ana, json={"assignee_id": ana_id}).status_code == 403
+    )
+
+    asignado = client.patch(
+        f"{base}/assign", headers=admin, json={"assignee_id": ana_id, "notes": "Zona de Ana"}
+    )
+    assert asignado.status_code == 200
+    assert asignado.json()["assigned_to"] == ana_id
+    assert asignado.json()["status"] == "ASIGNADO"
+    assert asignado.json()["history"][-1]["notes"] == "Zona de Ana"
+
+    cambio = {"new_status": "EN_ATENCION", "notes": "En sitio"}
+    assert client.patch(f"{base}/status", headers=beto, json=cambio).status_code == 403
+    assert client.patch(f"{base}/status", headers=ana, json=cambio).status_code == 200
+
+    mios = client.get("/api/v1/incidents/?assigned_to_me=true", headers=ana).json()
+    assert [c["id"] for c in mios] == [caso["id"]]
+    assert client.get("/api/v1/incidents/?assigned_to_me=true", headers=beto).json() == []
+
+
+def test_solo_se_asigna_a_inspectores_activos(client, db, make_user) -> None:
+    ciudadano_id, ciudadano = _cuenta(db, make_user, Role.CIUDADANO)
+    _, admin = _cuenta(db, make_user, Role.ADMINISTRADOR)
+    caso = client.post("/api/v1/incidents/", headers=ciudadano, json=_body()).json()
+    url = f"/api/v1/incidents/{caso['id']}/assign"
+
+    assert client.patch(url, headers=admin, json={"assignee_id": ciudadano_id}).status_code == 422
+    assert client.patch(url, headers=admin, json={"assignee_id": new_id()}).status_code == 422
+
+
+def test_listar_inspectores_solo_para_administrador(client, db, make_user) -> None:
+    inspector_id, _ = _cuenta(db, make_user, Role.INSPECTOR)
+    _, admin = _cuenta(db, make_user, Role.ADMINISTRADOR)
+    _, ciudadano = _cuenta(db, make_user, Role.CIUDADANO)
+
+    lista = client.get("/api/v1/auth/users?role=inspector", headers=admin)
+    assert lista.status_code == 200
+    assert [u["id"] for u in lista.json()] == [inspector_id]
+    assert client.get("/api/v1/auth/users?role=inspector", headers=ciudadano).status_code == 403

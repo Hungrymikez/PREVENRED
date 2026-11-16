@@ -101,3 +101,14 @@ class MongoTechnicianRepository(TechnicianRepository):
         cursor = self._collection.find(filter_query).limit(limit)
         docs = await cursor.to_list(length=limit)
         return [self._to_entity(d) for d in docs]
+
+    async def list_by_status(
+        self, status: VerificationStatus, limit: int = 100
+    ) -> list[TechnicianProfile]:
+        cursor = (
+            self._collection.find({"verification_status": status.value})
+            .sort("created_at", 1)
+            .limit(limit)
+        )
+        docs = await cursor.to_list(length=limit)
+        return [self._to_entity(d) for d in docs]

@@ -22,6 +22,13 @@ def ensure_indexes(db: Database) -> None:
 
     col.create_index("case_number", unique=True, sparse=True, name="uq_incidents_case_number")
     col.create_index("caseId", unique=True, sparse=True, name="uq_incidents_caseId")
+    # Idempotencia sin conexión (docs/db/incidents.md: clientId único parcial).
+    col.create_index(
+        "clientId",
+        unique=True,
+        partialFilterExpression={"clientId": {"$type": "string"}},
+        name="uq_incidents_clientId",
+    )
     col.create_index([("location", GEOSPHERE)], name="ix_incidents_location_2dsphere")
     col.create_index(
         [("status", ASCENDING), ("severity", ASCENDING)],

@@ -29,3 +29,7 @@ class VolunteerRepository(ABC):
         self, volunteer_id: EntityId
     ) -> list[VolunteerAssignment]:
         pass
+
+    @abstractmethod
+    async def list_available(self, limit: int = 100) -> list[VolunteerProfile]:
+        """CU-43: voluntarios disponibles para asignar a una misión."""

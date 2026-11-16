@@ -4,9 +4,10 @@ const venta = {
   offerType: 'VENTA',
   title: 'Tejas de zinc',
   description: 'Seis tejas en buen estado.',
-  category: 'Construcción',
-  condition: 'usado',
+  category: 'CONSTRUCCION',
+  condition: 'USADO',
   quantity: '6',
+  unit: 'unidades',
   price: '30000',
   zona: 'Cuba',
 }
@@ -26,10 +27,21 @@ describe('esquemaPublicacion (CU-11)', () => {
     expect(errores({ ...venta, offerType: 'ALQUILER', price: '0' }).price).toBeDefined()
   })
 
-  it('no exige precio en intercambio', () => {
+  it('no exige precio en donación', () => {
     expect(
-      esquemaPublicacion.safeParse({ ...venta, offerType: 'INTERCAMBIO', price: '' }).success,
+      esquemaPublicacion.safeParse({ ...venta, offerType: 'DONACION', price: '' }).success,
     ).toBe(true)
+  })
+
+  it('solo acepta las categorías, estados y modalidades del backend', () => {
+    expect(errores({ ...venta, category: 'Pintura' }).category).toBeDefined()
+    expect(errores({ ...venta, condition: 'buen_estado' }).condition).toBeDefined()
+    expect(errores({ ...venta, offerType: 'INTERCAMBIO' }).offerType).toBeDefined()
+  })
+
+  it('exige cantidad mayor a 0 y unidad', () => {
+    expect(errores({ ...venta, quantity: '0' }).quantity).toBeDefined()
+    expect(errores({ ...venta, unit: ' ' }).unit).toBeDefined()
   })
 
   it('exige elegir un barrio de la lista', () => {

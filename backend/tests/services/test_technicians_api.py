@@ -96,8 +96,21 @@ def test_busqueda_respeta_only_verified_y_especialidad(api, act_as, make_user):
     ("params", "status"),
     [({"radius_meters": 99}, 422), ({"radius_meters": 50001}, 422), ({"limit": 101}, 422)],
 )
-def test_limites_de_busqueda(api, params, status):
+def test_limites_de_busqueda(api, act_as, make_user, params, status):
+    act_as(make_user(Role.CIUDADANO))
     assert _search(api, **params).status_code == status
+
+
+def test_busqueda_exige_sesion(api):
+    assert _search(api).status_code == 401
+
+
+def test_ciudadano_no_ve_tecnicos_sin_verificar(api, act_as, make_user):
+    """RN-05: el teléfono y la ubicación de un técnico pendiente no se exponen a ciudadanos."""
+    act_as(make_user(Role.TECNICO))
+    _register(api)
+    act_as(make_user(Role.CIUDADANO))
+    assert _search(api, only_verified=False).json() == []
 
 
 def test_enlace_whatsapp(api, act_as, make_user):
@@ -152,3 +165,66 @@ def test_guard_clauses_del_perfil_tecnico(overrides):
     }
     with pytest.raises(DomainValidationError):
         TechnicianProfile.create(**data)
+
+
+def test_mi_perfil_404_si_no_existe_y_200_despues_de_registrar(api, act_as, make_user):
+    """CU-17: el técnico consulta su propio perfil y su estado de verificación."""
+    act_as(make_user(Role.TECNICO))
+    assert api.get(f"{BASE}/me").status_code == 404
+    creado = _register(api).json()
+
+    r = api.get(f"{BASE}/me")
+    assert r.status_code == 200
+    assert r.json()["id"] == creado["id"]
+    assert r.json()["verification_status"] == "PENDIENTE"
+
+
+def test_mi_perfil_exige_sesion(api):
+    assert api.get(f"{BASE}/me").status_code == 401
+
+
+def test_pendientes_solo_admin_y_excluye_revisados(api, act_as, make_user):
+    """CU-18: el Administrador lista los perfiles que esperan verificación."""
+    act_as(make_user(Role.TECNICO))
+    pendiente = _register(api).json()
+    act_as(make_user(Role.TECNICO))
+    revisado = _register(api).json()
+
+    act_as(make_user(Role.CIUDADANO))
+    assert api.get(f"{BASE}/pending").status_code == 403
+
+    act_as(make_user(Role.ADMIN))
+    api.patch(f"{BASE}/{revisado['id']}/verify", json={"approve": False})
+    r = api.get(f"{BASE}/pending")
+    assert r.status_code == 200
+    assert [t["id"] for t in r.json()] == [pendiente["id"]]
+
+
+def test_detalle_de_tecnico_respeta_verificacion(api, act_as, make_user):
+    """RN-05: un perfil sin verificar solo lo ven el Administrador y su dueño."""
+    act_as(make_user(Role.TECNICO))
+    tech_id = _register(api).json()["id"]
+    assert api.get(f"{BASE}/{tech_id}").status_code == 200  # el dueño
+
+    act_as(make_user(Role.CIUDADANO))
+    assert api.get(f"{BASE}/{tech_id}").status_code == 404
+
+    act_as(make_user(Role.ADMIN))
+    assert api.get(f"{BASE}/{tech_id}").status_code == 200
+    api.patch(f"{BASE}/{tech_id}/verify", json={"approve": True})
+
+    act_as(make_user(Role.CIUDADANO))
+    r = api.get(f"{BASE}/{tech_id}")
+    assert r.status_code == 200
+    assert r.json()["verification_status"] == "VERIFICADO"
+    assert api.get(f"{BASE}/64b7f0c2a1b2c3d4e5f60718").status_code == 404
+
+
+def test_whatsapp_de_tecnico_sin_verificar_no_se_entrega_a_ciudadanos(api, act_as, make_user):
+    """RN-05: el número de un técnico pendiente no se expone; el propio técnico sí lo ve."""
+    act_as(make_user(Role.TECNICO))
+    tech_id = _register(api).json()["id"]
+    act_as(make_user(Role.CIUDADANO))
+    assert api.get(f"{BASE}/{tech_id}/whatsapp").status_code == 404
+    act_as(make_user(Role.ADMIN))
+    assert api.get(f"{BASE}/{tech_id}/whatsapp").status_code == 200

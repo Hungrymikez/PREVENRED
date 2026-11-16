@@ -26,8 +26,10 @@ export default function MisCasos() {
 
   return (
     <>
-      <h1 className="text-2xl font-bold text-slate-900">Mis casos</h1>
-      <p className="mt-1 text-slate-600">El estado de tus reportes y solicitudes de ayuda.</p>
+      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Mis casos</h1>
+      <p className="mt-1 text-slate-600 dark:text-slate-300">
+        El estado de tus reportes y solicitudes de ayuda.
+      </p>
 
       {/* A1: buscar por número de caso */}
       <form
@@ -61,19 +63,23 @@ export default function MisCasos() {
             Cuando hagas un reporte o pidas ayuda, aparecerá aquí.
           </SinResultados>
         ) : (
-          <ul className="divide-y divide-slate-100 rounded-2xl bg-white shadow-sm">
+          <ul className="divide-y divide-slate-100 rounded-2xl bg-white shadow-sm dark:divide-white/10 dark:bg-slate-900">
             {casos.map((caso) => (
               <li key={caso.caseId}>
                 <Link
                   to={`/emergencia/casos/${caso.caseId}`}
-                  className="flex items-center gap-3 p-4 hover:bg-slate-50"
+                  className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-white/5"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="font-mono text-sm font-semibold text-slate-900">{caso.caseId}</p>
-                    <p className="text-slate-700">
+                    <p className="font-mono text-sm font-semibold text-slate-900 dark:text-white">
+                      {caso.caseId}
+                    </p>
+                    <p className="text-slate-700 dark:text-slate-200">
                       {CATEGORIAS_REPORTE[caso.categoria].titulo} · {nombreTipo(caso)}
                     </p>
-                    <p className="text-xs text-slate-500">{formatearFecha(caso.reportedAt)}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {formatearFecha(caso.reportedAt)}
+                    </p>
                   </div>
                   <EstadoCaso caso={caso} />
                   <ChevronRight className="size-5 text-slate-400" aria-hidden="true" />

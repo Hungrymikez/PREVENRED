@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from prevenred.auth.domain.role import Role
 from prevenred.auth.domain.user import User
 from prevenred.auth.interface.dependencies import get_current_user
 from prevenred.shared.domain.errors import NotFoundError
@@ -10,12 +11,15 @@ from prevenred.shared.domain.ids import EntityId
 from prevenred.shared.infrastructure.mongo import get_database
 
 from ..application.manage_technician import (
+    GetMyTechnicianProfileUseCase,
+    GetTechnicianProfileUseCase,
+    ListPendingTechniciansUseCase,
     RegisterTechnicianProfileCommand,
     RegisterTechnicianProfileUseCase,
     VerifyTechnicianCommand,
     VerifyTechnicianUseCase,
 )
-from ..domain.technician import Specialty
+from ..domain.technician import Specialty, TechnicianProfile, VerificationStatus
 from ..infrastructure.mongo_technician_repository import MongoTechnicianRepository
 from .schemas import (
     RegisterTechnicianRequest,
@@ -25,6 +29,47 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/services", tags=["Services - OficiosYa"])
+
+
+def _to_response(profile: TechnicianProfile) -> TechnicianResponse:
+    return TechnicianResponse(
+        id=profile.id.value,
+        user_id=profile.user_id.value,
+        full_name=profile.full_name,
+        phone_number=profile.phone_number,
+        specialties=profile.specialties,
+        experience_years=profile.experience_years,
+        bio=profile.bio,
+        verification_status=profile.verification_status,
+        rating_average=profile.rating_average,
+        reviews_count=profile.reviews_count,
+        longitude=profile.longitude,
+        latitude=profile.latitude,
+        created_at=profile.created_at,
+    )
+
+
+# Las rutas fijas (/me, /pending, /search) van antes de /technicians/{technician_id}.
+@router.get("/technicians/me", response_model=TechnicianResponse)
+async def get_my_technician_profile(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
+) -> TechnicianResponse:
+    """CU-17: perfil propio del técnico con su estado de verificación (404 si no existe)."""
+    use_case = GetMyTechnicianProfileUseCase(MongoTechnicianRepository(db))
+    return _to_response(await use_case.execute(current_user))
+
+
+@router.get("/technicians/pending", response_model=list[TechnicianResponse])
+async def list_pending_technicians(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
+    limit: int = Query(100, ge=1, le=200),
+) -> list[TechnicianResponse]:
+    """CU-18: perfiles pendientes de verificación (solo Administrador)."""
+    use_case = ListPendingTechniciansUseCase(MongoTechnicianRepository(db))
+    items = await use_case.execute(current_user, limit=limit)
+    return [_to_response(t) for t in items]
 
 
 @router.post(
@@ -51,21 +96,7 @@ async def register_technician_profile(
         user=current_user,
     )
     res = await use_case.execute(cmd)
-    return TechnicianResponse(
-        id=res.id.value,
-        user_id=res.user_id.value,
-        full_name=res.full_name,
-        phone_number=res.phone_number,
-        specialties=res.specialties,
-        experience_years=res.experience_years,
-        bio=res.bio,
-        verification_status=res.verification_status,
-        rating_average=res.rating_average,
-        reviews_count=res.reviews_count,
-        longitude=res.longitude,
-        latitude=res.latitude,
-        created_at=res.created_at,
-    )
+    return _to_response(res)
 
 
 @router.patch("/technicians/{technician_id}/verify", response_model=TechnicianResponse)
@@ -84,21 +115,7 @@ async def verify_technician(
         admin_user=current_user,
     )
     res = await use_case.execute(cmd)
-    return TechnicianResponse(
-        id=res.id.value,
-        user_id=res.user_id.value,
-        full_name=res.full_name,
-        phone_number=res.phone_number,
-        specialties=res.specialties,
-        experience_years=res.experience_years,
-        bio=res.bio,
-        verification_status=res.verification_status,
-        rating_average=res.rating_average,
-        reviews_count=res.reviews_count,
-        longitude=res.longitude,
-        latitude=res.latitude,
-        created_at=res.created_at,
-    )
+    return _to_response(res)
 
 
 @router.get("/technicians/search", response_model=list[TechnicianResponse])
@@ -109,8 +126,13 @@ async def search_technicians(
     specialty: Specialty | None = Query(None),
     only_verified: bool = Query(True),
     limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> list[TechnicianResponse]:
+    """CU-19: técnicos cercanos. Exige sesión; solo el Administrador ve los no verificados
+    (incluye su teléfono y ubicación, RN-05)."""
+    if current_user.role != Role.ADMIN:
+        only_verified = True
     repo = MongoTechnicianRepository(db)
     items = await repo.search_nearby(
         longitude=longitude,
@@ -120,35 +142,26 @@ async def search_technicians(
         only_verified=only_verified,
         limit=limit,
     )
-    return [
-        TechnicianResponse(
-            id=t.id.value,
-            user_id=t.user_id.value,
-            full_name=t.full_name,
-            phone_number=t.phone_number,
-            specialties=t.specialties,
-            experience_years=t.experience_years,
-            bio=t.bio,
-            verification_status=t.verification_status,
-            rating_average=t.rating_average,
-            reviews_count=t.reviews_count,
-            longitude=t.longitude,
-            latitude=t.latitude,
-            created_at=t.created_at,
-        )
-        for t in items
-    ]
+    return [_to_response(t) for t in items]
 
 
 @router.get("/technicians/{technician_id}/whatsapp", response_model=WhatsAppContactResponse)
 async def get_technician_whatsapp_link(
     technician_id: str,
     message: str = Query("Hola, te contacto desde PrevenRed para una cotización."),
+    current_user: User = Depends(get_current_user),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> WhatsAppContactResponse:
+    """CU-22. RN-05: el número de un técnico sin verificar no se entrega (solo al
+    Administrador o al propio técnico); para los demás responde como si no existiera."""
     repo = MongoTechnicianRepository(db)
     profile = await repo.get_by_id(EntityId(technician_id))
-    if not profile:
+    visible = profile is not None and (
+        profile.verification_status == VerificationStatus.VERIFIED
+        or current_user.role == Role.ADMIN
+        or profile.user_id.value == str(getattr(current_user.id, "value", current_user.id))
+    )
+    if not visible:
         raise NotFoundError(f"Técnico con ID '{technician_id}' no encontrado.")
 
     wa_url = profile.generate_whatsapp_link(message=message)
@@ -156,3 +169,14 @@ async def get_technician_whatsapp_link(
         technician_name=profile.full_name,
         whatsapp_url=wa_url,
     )
+
+
+@router.get("/technicians/{technician_id}", response_model=TechnicianResponse)
+async def get_technician(
+    technician_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
+) -> TechnicianResponse:
+    """CU-19: detalle de un técnico; los no verificados solo los ve el Administrador o su dueño."""
+    use_case = GetTechnicianProfileUseCase(MongoTechnicianRepository(db))
+    return _to_response(await use_case.execute(technician_id, current_user))

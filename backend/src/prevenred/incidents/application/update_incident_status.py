@@ -39,6 +39,12 @@ class UpdateIncidentStatus:
         incident = self._repository.get_by_id(command.incident_id)
         if incident is None:
             raise NotFoundError(f"Incidente con ID '{command.incident_id}' no encontrado.")
+        # El Administrador gestiona cualquier caso; el Inspector, solo los asignados a él.
+        if (
+            command.operator.role.value == "inspector"
+            and incident.assigned_to != command.operator.user_id
+        ):
+            raise ForbiddenError("Solo puedes actualizar los casos que tienes asignados.")
 
         previous = incident.status
         incident.transition_status(

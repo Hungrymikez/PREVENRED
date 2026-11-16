@@ -32,6 +32,7 @@ class MaterialResponse(BaseModel):
     longitude: float
     latitude: float
     owner_id: str
+    owner_name: str = ""
     media_urls: list[str]
     is_active: bool
     created_at: datetime

@@ -5,6 +5,7 @@ la capa infrastructure decide CÓMO (PyMongo, memoria para tests, etc.).
 
 from abc import ABC, abstractmethod
 
+from prevenred.auth.domain.role import Role
 from prevenred.auth.domain.user import User
 from prevenred.auth.domain.value_objects import Email
 
@@ -27,3 +28,7 @@ class UserRepository(ABC):
     @abstractmethod
     def update(self, user: User) -> None:
         """Guarda los cambios de un usuario existente."""
+
+    def list_by_role(self, role: Role) -> list[User]:
+        """Cuentas activas con ese rol (p. ej. inspectores para asignar casos)."""
+        raise NotImplementedError

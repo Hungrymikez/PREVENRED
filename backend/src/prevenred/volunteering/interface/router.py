@@ -14,6 +14,7 @@ from ..application.manage_volunteering import (
     ManageVolunteeringUseCase,
     RegisterVolunteerCommand,
 )
+from ..domain.volunteer import VolunteerProfile
 from ..infrastructure.mongo_volunteer_repository import MongoVolunteerRepository
 from .schemas import (
     AssignmentResponse,
@@ -23,6 +24,20 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/volunteering", tags=["Volunteering & Mobilization"])
+
+
+def _profile_response(res: VolunteerProfile) -> VolunteerProfileResponse:
+    return VolunteerProfileResponse(
+        id=res.id.value,
+        user_id=res.user_id.value,
+        full_name=res.full_name,
+        phone_number=res.phone_number,
+        skills=res.skills,
+        is_available=res.is_available,
+        longitude=res.longitude,
+        latitude=res.latitude,
+        created_at=res.created_at,
+    )
 
 
 @router.post(
@@ -45,17 +60,28 @@ async def register_volunteer(
         user=current_user,
     )
     res = await use_case.register_volunteer(cmd)
-    return VolunteerProfileResponse(
-        id=res.id.value,
-        user_id=res.user_id.value,
-        full_name=res.full_name,
-        phone_number=res.phone_number,
-        skills=res.skills,
-        is_available=res.is_available,
-        longitude=res.longitude,
-        latitude=res.latitude,
-        created_at=res.created_at,
-    )
+    return _profile_response(res)
+
+
+@router.get("/me", response_model=VolunteerProfileResponse)
+async def my_volunteer_profile(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
+) -> VolunteerProfileResponse:
+    """CU-44: perfil propio de voluntario (404 si la persona no se ha inscrito)."""
+    use_case = ManageVolunteeringUseCase(MongoVolunteerRepository(db))
+    return _profile_response(await use_case.get_my_profile(current_user))
+
+
+@router.get("/volunteers", response_model=list[VolunteerProfileResponse])
+async def list_available_volunteers(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
+) -> list[VolunteerProfileResponse]:
+    """CU-43: voluntarios disponibles (solo administrador o inspector)."""
+    use_case = ManageVolunteeringUseCase(MongoVolunteerRepository(db))
+    volunteers = await use_case.list_available_volunteers(current_user)
+    return [_profile_response(v) for v in volunteers]
 
 
 @router.post("/assign", response_model=AssignmentResponse, status_code=status.HTTP_201_CREATED)

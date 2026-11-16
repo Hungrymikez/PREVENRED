@@ -38,19 +38,29 @@ export default function DetalleCaso() {
           <ErrorAlCargar error={error} />
         ) : (
           <div className="grid gap-6 lg:grid-cols-2">
-            <section className="rounded-2xl bg-white p-6 shadow-sm">
-              <p className="font-mono text-sm font-semibold text-slate-500">{caso.caseId}</p>
-              <h1 className="mt-1 text-2xl font-bold text-slate-900">{nombreTipo(caso)}</h1>
-              <p className="text-slate-600">{CATEGORIAS_REPORTE[caso.categoria].titulo}</p>
+            <section className="rounded-2xl bg-white p-6 shadow-sm dark:bg-slate-900">
+              <p className="font-mono text-sm font-semibold text-slate-500 dark:text-slate-400">
+                {caso.caseId}
+              </p>
+              <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+                {nombreTipo(caso)}
+              </h1>
+              <p className="text-slate-600 dark:text-slate-300">
+                {CATEGORIAS_REPORTE[caso.categoria].titulo}
+              </p>
               <div className="mt-3">
                 <EstadoCaso caso={caso} />
               </div>
               {caso.quantity && (
-                <p className="mt-3 text-slate-700">Para {caso.quantity} personas</p>
+                <p className="mt-3 text-slate-700 dark:text-slate-200">
+                  Para {caso.quantity} personas
+                </p>
               )}
-              {caso.description && <p className="mt-3 text-slate-700">{caso.description}</p>}
+              {caso.description && (
+                <p className="mt-3 text-slate-700 dark:text-slate-200">{caso.description}</p>
+              )}
 
-              <h2 className="mt-6 font-semibold text-slate-900">Seguimiento</h2>
+              <h2 className="mt-6 font-semibold text-slate-900 dark:text-white">Seguimiento</h2>
               <LineaDeTiempo caso={caso} />
             </section>
 
@@ -83,7 +93,9 @@ function LineaDeTiempo({ caso }) {
             )}
             <span
               className={`relative flex size-6 shrink-0 items-center justify-center rounded-full ${
-                cambio ? 'bg-green-600 text-white' : 'border-2 border-slate-300 bg-white'
+                cambio
+                  ? 'bg-green-600 text-white'
+                  : 'border-2 border-slate-300 bg-white dark:border-white/20 dark:bg-slate-900'
               }`}
               aria-hidden="true"
             >
@@ -95,9 +107,13 @@ function LineaDeTiempo({ caso }) {
                 <span className="sr-only">{cambio ? ' (completado)' : ' (pendiente)'}</span>
               </p>
               {cambio && (
-                <p className="text-xs text-slate-500">{formatearFecha(cambio.changedAt)}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {formatearFecha(cambio.changedAt)}
+                </p>
               )}
-              {cambio?.note && <p className="mt-1 text-sm text-slate-700">{cambio.note}</p>}
+              {cambio?.note && (
+                <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">{cambio.note}</p>
+              )}
             </div>
           </li>
         )

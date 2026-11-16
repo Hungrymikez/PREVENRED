@@ -27,7 +27,7 @@ export function SelectorUbicacion({ valor, onCambiar, error }) {
       </Boton>
       {gps.error && <Alerta tipo="error">{gps.error} Marca el lugar tocando el mapa.</Alerta>}
 
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-slate-600 dark:text-slate-300">
         {valor
           ? 'Puedes tocar el mapa para corregir el punto.'
           : 'O toca el mapa donde está el problema.'}
@@ -41,7 +41,7 @@ export function SelectorUbicacion({ valor, onCambiar, error }) {
           </>
         )}
       </Mapa>
-      {error && <p className="text-sm text-alerta-700">{error}</p>}
+      {error && <p className="text-sm text-alerta-700 dark:text-red-300">{error}</p>}
     </div>
   )
 }

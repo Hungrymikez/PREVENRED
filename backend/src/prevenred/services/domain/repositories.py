@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 from prevenred.shared.domain.ids import EntityId
 
-from .technician import Specialty, TechnicianProfile
+from .technician import Specialty, TechnicianProfile, VerificationStatus
 
 
 class TechnicianRepository(ABC):
@@ -29,3 +29,9 @@ class TechnicianRepository(ABC):
         limit: int = 50,
     ) -> list[TechnicianProfile]:
         pass
+
+    @abstractmethod
+    async def list_by_status(
+        self, status: VerificationStatus, limit: int = 100
+    ) -> list[TechnicianProfile]:
+        """Perfiles en un estado de verificación, los más antiguos primero (CU-18)."""
