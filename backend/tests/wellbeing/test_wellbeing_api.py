@@ -6,6 +6,9 @@ from prevenred.shared.domain.errors import DomainValidationError
 from prevenred.shared.domain.ids import EntityId
 from prevenred.wellbeing.domain.consent import WellbeingConsent
 from prevenred.wellbeing.domain.survey import WellbeingSurvey
+from prevenred.wellbeing.infrastructure.mongo_wellbeing_repository import (
+    MongoWellbeingRepository,
+)
 
 BASE = "/api/v1/wellbeing"
 
@@ -104,6 +107,24 @@ def test_pii_se_enmascara_antes_de_persistir(api, act_as, make_user, motor_db):
     )
 
 
+def test_encuesta_no_guarda_el_usuario(api, act_as, make_user, motor_db):
+    """RN-03: la respuesta queda desvinculada de la cuenta."""
+    user = act_as(make_user())
+    api.post(f"{BASE}/consent", json={})
+    assert _survey(api, text="no puedo más").status_code == 201
+    stored = motor_db["wellbeing_surveys"]._col.find_one()
+    assert "user_id" not in stored
+    assert user.id not in {str(v) for v in stored.values()}
+
+
+@pytest.mark.asyncio
+async def test_create_indexes_borra_el_usuario_de_encuestas_antiguas(motor_db):
+    surveys = motor_db["wellbeing_surveys"]._col
+    surveys.insert_one({"_id": "s1", "user_id": "u1", "neighborhood": "Cuba", "mood_score": 3})
+    await MongoWellbeingRepository(motor_db).create_indexes()
+    assert surveys.find_one({"_id": "s1"}) == {"_id": "s1", "neighborhood": "Cuba", "mood_score": 3}
+
+
 # ---------- Boundary testing de la escala de ánimo y el barrio ----------
 
 
@@ -117,13 +138,13 @@ def test_limites_de_escala_de_animo_en_api(api, act_as, make_user, mood, status)
 @pytest.mark.parametrize("mood", [0, 6])
 def test_limites_de_escala_de_animo_en_dominio(mood):
     with pytest.raises(DomainValidationError):
-        WellbeingSurvey.create(user_id=EntityId.generate(), neighborhood="Cuba", mood_score=mood)
+        WellbeingSurvey.create(neighborhood="Cuba", mood_score=mood)
 
 
 @pytest.mark.parametrize("neighborhood", ["", " ", "A "])
 def test_barrio_demasiado_corto_en_dominio(neighborhood):
     with pytest.raises(DomainValidationError):
-        WellbeingSurvey.create(user_id=EntityId.generate(), neighborhood=neighborhood, mood_score=3)
+        WellbeingSurvey.create(neighborhood=neighborhood, mood_score=3)
 
 
 def test_consentimiento_sin_version_es_invalido():

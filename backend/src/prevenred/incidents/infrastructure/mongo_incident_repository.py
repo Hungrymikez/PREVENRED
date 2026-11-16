@@ -147,9 +147,14 @@ class MongoIncidentRepository(IncidentRepository):
         self,
         status: IncidentStatus | None = None,
         limit: int = 50,
+        reported_by: str | None = None,
     ) -> list[Incident]:
         query: dict[str, Any] = {}
         if status is not None:
             query["status"] = status.value
+        if reported_by is not None:
+            query["reportedBy"] = (
+                ObjectId(reported_by) if ObjectId.is_valid(reported_by) else reported_by
+            )
         cursor = self._collection.find(query).sort("createdAt", -1).limit(limit)
         return [_to_entity(doc) for doc in cursor]

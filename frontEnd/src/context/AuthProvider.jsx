@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { iniciarSesion as loginApi, obtenerUsuarioActual } from '@/api/auth'
 import { api, TOKEN_KEY } from '@/api/client'
@@ -38,12 +39,17 @@ export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null)
   // Mientras se verifica el token guardado no sabemos si hay sesión: las rutas esperan.
   const [verificando, setVerificando] = useState(() => Boolean(leer(TOKEN_KEY)))
+  const queryClient = useQueryClient()
 
+  // Se borra también la caché de datos (casos, pendientes…) para que quien entre
+  // después en el mismo celular no vea nada de esta cuenta. Los reportes guardados
+  // sin conexión siguen en el dispositivo, a nombre de su dueño, hasta que vuelva a entrar.
   const cerrarSesion = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USUARIO_KEY)
     setUsuario(null)
-  }, [])
+    queryClient.clear()
+  }, [queryClient])
 
   useEffect(() => {
     if (!leer(TOKEN_KEY)) return

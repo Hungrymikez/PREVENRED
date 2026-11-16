@@ -57,8 +57,9 @@ class WellbeingUseCase:
                 "Debe otorgar consentimiento informado antes de participar en Mente Resiliente."
             )
 
+        # RN-03: la encuesta no se liga a la cuenta; el usuario solo se usa para
+        # comprobar el consentimiento.
         survey = WellbeingSurvey.create(
-            user_id=user_id,
             neighborhood=command.neighborhood,
             mood_score=command.mood_score,
             raw_text=command.raw_text,

@@ -17,7 +17,9 @@ CRISIS_PATTERNS = [
 
 @dataclass
 class WellbeingSurvey(Entity):
-    user_id: EntityId
+    """Respuesta de bienestar. RN-03: queda DESVINCULADA de la cuenta, así que no
+    guarda ningún identificador de la persona (ni user_id ni nada derivable de él)."""
+
     neighborhood: str
     mood_score: int  # 1 (muy mal) a 5 (muy bien)
     sanitized_text: str
@@ -27,7 +29,6 @@ class WellbeingSurvey(Entity):
     @classmethod
     def create(
         cls,
-        user_id: EntityId,
         neighborhood: str,
         mood_score: int,
         raw_text: str | None = None,
@@ -47,7 +48,6 @@ class WellbeingSurvey(Entity):
 
         return cls(
             id=EntityId.generate(),
-            user_id=user_id,
             neighborhood=clean_neigh,
             mood_score=mood_score,
             sanitized_text=sanitized,

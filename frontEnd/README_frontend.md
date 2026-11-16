@@ -126,7 +126,7 @@ Siguen las etapas de la especificación: levantamiento y arquitectura, Modo Coti
 
 > Las pantallas de esta etapa ya existen con **datos de prueba** (`src/api/mocks/`). Cuando el backend publique los endpoints, solo cambian las funciones de `src/api/segundavida.js`, `oficiosya.js` y `bienestar.js`.
 
-- [x] SegundaVida: publicar, buscar, filtrar, intercambio, venta y alquiler _(datos de prueba; faltan fotos y solicitud de alquiler)_
+- [x] SegundaVida: publicar, buscar, filtrar, intercambio, venta y alquiler con hasta 5 fotos por publicación _(datos de prueba: las fotos se ven solo en este navegador; falta subirlas con `/media/upload` y la solicitud de alquiler)_
 - [x] OficiosYa: filtro por especialidad, zona, disponibilidad y valoración; lista y mapa; contacto por enlace autorizado de WhatsApp _(datos de prueba)_
 - [ ] OficiosYa: calificar al técnico (RF-09) y pedir cotización (CU-20)
 - [x] Mente Resiliente: consentimiento, registro anónimo de ánimo y líneas de apoyo _(datos de prueba; falta el número oficial de la línea)_
@@ -152,6 +152,7 @@ Siguen las etapas de la especificación: levantamiento y arquitectura, Modo Coti
 - **Trabajo sin conexión** (CU-37, RNF-08). Implementado para los reportes de emergencia:
   - **PWA**: `public/sw.js` guarda la app para que abra sin señal y `public/manifest.webmanifest` permite instalarla. Solo se activa en producción (`npm run build`); en `npm run dev` no.
   - Sin señal, el reporte se guarda en el celular (**IndexedDB, cifrado con AES-GCM**) con un `clientId` único, para que el servidor nunca lo duplique (`src/offline/almacen.js`).
+  - Cada reporte guardado es de quien lo hizo: se cifra con una clave propia de esa cuenta y solo esa persona lo ve y lo envía. En un celular compartido, quien entre después no ve ni envía los reportes de otro; quedan en el dispositivo hasta que su dueño vuelva a entrar. Al cerrar sesión también se borra la caché de datos.
   - Al volver la señal se envían solos, en orden, y se reintenta cada 30 s (`src/offline/sincronizar.js`). Si el servidor rechaza uno, queda marcado en _Mis casos_ para reintentar o descartar.
   - Sin señal se usan el último usuario y el último modo conocidos, para poder reportar aunque la app abra sin conexión.
   - **Pendiente**: guardar el mapa base para verlo sin señal (hoy sin red se ve vacío, pero el GPS y tocar el mapa siguen funcionando) y priorizar el envío por gravedad.

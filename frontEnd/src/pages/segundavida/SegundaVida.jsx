@@ -10,7 +10,7 @@ import { Cargando, ErrorAlCargar, SinResultados } from '@/components/ui/Estados'
 import { Etiqueta } from '@/components/ui/Etiqueta'
 import { useFiltrosUrl } from '@/hooks/useFiltrosUrl'
 import { formatearDistancia } from '@/utils/distancia'
-import { IconoCategoria } from './IconoCategoria'
+import { Portada } from './Portada'
 import { textoPrecio } from './precio'
 
 /** CU-12 · Buscar materiales por ubicación. */
@@ -162,7 +162,7 @@ function TarjetaPublicacion({ publicacion: p }) {
       to={`/segundavida/${p.id}`}
       className="block h-full rounded-xl border border-slate-200 bg-white p-3 transition hover:border-marca-600 hover:shadow-sm dark:border-white/10 dark:bg-slate-900 dark:hover:border-amber-400"
     >
-      <IconoCategoria categoria={p.category} />
+      <Portada publicacion={p} />
       <div className="mt-3 flex flex-wrap gap-1">
         <Etiqueta color="azul">{p.category}</Etiqueta>
         <Etiqueta>{CONDICIONES[p.condition]}</Etiqueta>

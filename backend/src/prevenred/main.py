@@ -7,6 +7,7 @@ Docs interactivas:  http://localhost:8000/docs
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from prevenred.aid.infrastructure.mongo_aid_repository import MongoAidRepository
 from prevenred.aid.interface.router import router as aid_router
@@ -24,6 +25,7 @@ from prevenred.marketplace.infrastructure.mongo_material_repository import (
     MongoMaterialRepository,
 )
 from prevenred.marketplace.interface.router import router as marketplace_router
+from prevenred.media.interface import router as media_interface
 from prevenred.media.interface.router import router as media_router
 from prevenred.operating_mode.infrastructure.indexes import (
     ensure_indexes as operating_mode_indexes,
@@ -106,6 +108,10 @@ def create_app() -> FastAPI:
     app.include_router(geo_router, prefix="/api/v1")
     app.include_router(media_router, prefix="/api/v1")
     app.include_router(reporting_router, prefix="/api/v1")
+    # Sirve los archivos subidos en /static/uploads (las URLs que devuelve media/upload).
+    upload_dir = media_interface.UPLOAD_DIR
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    app.mount(media_interface.PUBLIC_URL_PREFIX, StaticFiles(directory=upload_dir), name="uploads")
     # Cada contexto nuevo agrega aquí su router (una línea por contexto).
     return app
 

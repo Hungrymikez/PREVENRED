@@ -92,9 +92,13 @@ def update_incident_status(
 @router.get("/", response_model=list[IncidentResponse], summary="Listar incidentes")
 def list_incidents(
     use_case: ListIncidents = Depends(get_list_incidents),
+    requester: TokenPayload = Depends(require_authenticated),
     incident_status: IncidentStatus | None = Query(None, alias="status"),
     limit: int = Query(50, ge=1, le=100),
 ) -> list[IncidentResponse]:
-    """Lista reportes recientes (filtro opcional por estado)."""
-    items = use_case.execute(status=incident_status, limit=limit)
+    """Lista reportes recientes (filtro opcional por estado).
+
+    Exige sesión. Administrador e inspector ven todos; los demás roles, solo los suyos.
+    """
+    items = use_case.execute(requester=requester, status=incident_status, limit=limit)
     return [_to_response(i) for i in items]
