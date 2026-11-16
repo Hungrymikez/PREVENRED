@@ -4,9 +4,18 @@ from fastapi import Depends
 from pymongo.database import Database
 
 from prevenred.auth.application.ports import TokenPayload
+from prevenred.auth.domain.repositories import UserRepository
 from prevenred.auth.domain.role import Role
-from prevenred.auth.interface.dependencies import get_current_token, require_roles
-from prevenred.incidents.application.list_incidents import ListIncidents
+from prevenred.auth.interface.dependencies import (
+    get_current_token,
+    get_user_repository,
+    require_roles,
+)
+from prevenred.incidents.application.assign_incident import AssignIncident
+from prevenred.incidents.application.list_incidents import (
+    GetIncidentByCaseNumber,
+    ListIncidents,
+)
 from prevenred.incidents.application.report_incident import ReportIncident
 from prevenred.incidents.application.update_incident_status import UpdateIncidentStatus
 from prevenred.incidents.domain.repositories import IncidentRepository
@@ -44,6 +53,29 @@ def get_list_incidents(
     repo: IncidentRepository = Depends(get_incident_repository),
 ) -> ListIncidents:
     return ListIncidents(repo)
+
+
+def get_incident_by_case_number(
+    repo: IncidentRepository = Depends(get_incident_repository),
+) -> GetIncidentByCaseNumber:
+    return GetIncidentByCaseNumber(repo)
+
+
+def get_assign_incident(
+    repo: IncidentRepository = Depends(get_incident_repository),
+) -> AssignIncident:
+    return AssignIncident(repo)
+
+
+def get_user_role_lookup(users: UserRepository = Depends(get_user_repository)):
+    """Devuelve una función id -> rol de la cuenta activa (None si no existe o está inactiva).
+    Vive en el cableado para que incidents no dependa del interior de identity."""
+
+    def lookup(user_id: str) -> Role | None:
+        user = users.get_by_id(user_id)
+        return user.role if user is not None and user.is_active else None
+
+    return lookup
 
 
 require_authenticated = get_current_token

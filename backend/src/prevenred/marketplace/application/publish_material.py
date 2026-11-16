@@ -42,6 +42,7 @@ class PublishMaterialUseCase:
             owner_id=owner_id,
             price=command.price,
             media_urls=command.media_urls,
+            owner_name=command.owner.full_name,
         )
         await self._repository.save(material)
         return material

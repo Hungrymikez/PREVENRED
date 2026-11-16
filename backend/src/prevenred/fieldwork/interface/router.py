@@ -1,14 +1,19 @@
 """Rutas HTTP del contexto fieldwork (CU-34, CU-36; RF-19..21)."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from prevenred.auth.application.ports import TokenPayload
+from prevenred.fieldwork.application.list_inspections import ListInspections
 from prevenred.fieldwork.application.submit_inspection import (
     SubmitInspection,
     SubmitInspectionCommand,
 )
 from prevenred.fieldwork.domain.inspection import PropertyInspection
-from prevenred.fieldwork.interface.dependencies import get_field_token, get_submit_inspection
+from prevenred.fieldwork.interface.dependencies import (
+    get_field_token,
+    get_list_inspections,
+    get_submit_inspection,
+)
 from prevenred.fieldwork.interface.schemas import (
     PropertyInspectionResponse,
     SubmitInspectionRequest,
@@ -61,3 +66,17 @@ def submit_inspection(
         )
     )
     return _to_response(result)
+
+
+@router.get(
+    "/inspections",
+    response_model=list[PropertyInspectionResponse],
+    summary="CU-35 Consultar inspecciones",
+)
+def list_inspections(
+    limit: int = Query(default=100, ge=1, le=500),
+    use_case: ListInspections = Depends(get_list_inspections),
+    requester: TokenPayload = Depends(get_field_token),
+) -> list[PropertyInspectionResponse]:
+    """Inspector: sus inspecciones. Administrador: las más recientes de todos."""
+    return [_to_response(i) for i in use_case.execute(requester, limit)]

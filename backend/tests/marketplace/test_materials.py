@@ -17,6 +17,7 @@ from prevenred.marketplace.domain.material import (
     MaterialCategory,
     MaterialCondition,
     OfferType,
+    public_display_name,
 )
 from prevenred.marketplace.domain.repositories import MaterialRepository
 from prevenred.shared.domain.errors import DomainValidationError
@@ -244,3 +245,11 @@ async def test_search_materials(citizen_user: User) -> None:
     )
     assert len(donaciones) == 1
     assert donaciones[0].offer_type == OfferType.DONACION
+
+
+@pytest.mark.parametrize(
+    ("full_name", "expected"),
+    [("Sara Salas Gómez", "Sara S."), ("Jorge", "Jorge"), ("", ""), ("  ana  ruiz ", "ana R.")],
+)
+def test_public_display_name(full_name: str, expected: str) -> None:
+    assert public_display_name(full_name) == expected

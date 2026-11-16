@@ -68,6 +68,10 @@ class Incident(Entity):
     history: list[IncidentStatusTransition] = field(default_factory=list)
     assigned_to: EntityId | None = None
     updated_at: datetime | None = None
+    # Idempotencia sin conexión (CU-37, H-07): el celular genera este id y lo repite al reintentar.
+    client_id: str | None = None
+    # Hora en que la persona hizo el reporte; sin conexión puede ser anterior a created_at.
+    reported_at: datetime | None = None
 
     @classmethod
     def create(
@@ -80,6 +84,8 @@ class Incident(Entity):
         latitude: float,
         reported_by: EntityId,
         media_urls: list[str] | None = None,
+        client_id: str | None = None,
+        reported_at: datetime | None = None,
     ) -> "Incident":
         """Crea un reporte en estado REPORTADO (CU-29)."""
         cleaned_desc = description.strip() if description else ""
@@ -91,6 +97,9 @@ class Incident(Entity):
             raise ValidationError("Coordenadas geográficas inválidas.")
 
         now = utcnow()
+        # La hora del celular no puede quedar en el futuro respecto al servidor.
+        if reported_at is None or reported_at > now:
+            reported_at = now
         incident_id = new_id()
         case_num = f"INC-{now.strftime('%Y%m%d')}-{incident_id[:6].upper()}"
 
@@ -108,7 +117,22 @@ class Incident(Entity):
             created_at=now,
             history=[],
             updated_at=now,
+            client_id=(client_id or "").strip() or None,
+            reported_at=reported_at,
         )
+
+    def assign(self, *, assignee_id: EntityId, changed_by: EntityId, notes: str = "") -> None:
+        """CU-39: asigna el caso a un responsable. Si aún no estaba en atención, pasa a
+        ASIGNADO; el cambio queda en el historial con la nota."""
+        if self.status == IncidentStatus.RESOLVED:
+            raise ValidationError("El caso ya está resuelto; no se puede asignar.")
+        self.assigned_to = assignee_id
+        if self.status in (IncidentStatus.REPORTED, IncidentStatus.IN_REVIEW):
+            self.transition_status(
+                new_status=IncidentStatus.ASSIGNED, changed_by=changed_by, notes=notes
+            )
+        else:
+            self.updated_at = utcnow()
 
     def transition_status(
         self,

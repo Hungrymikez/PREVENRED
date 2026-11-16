@@ -11,11 +11,32 @@ from prevenred.shared.infrastructure.mongo import get_database
 
 from ..application.publish_material import PublishMaterialCommand, PublishMaterialUseCase
 from ..application.search_materials import SearchMaterialsQuery, SearchMaterialsUseCase
-from ..domain.material import MaterialCategory, OfferType
+from ..domain.material import Material, MaterialCategory, OfferType
 from ..infrastructure.mongo_material_repository import MongoMaterialRepository
 from .schemas import MaterialResponse, PublishMaterialRequest
 
 router = APIRouter(prefix="/marketplace", tags=["Marketplace - SegundaVida"])
+
+
+def _to_response(m: Material) -> MaterialResponse:
+    return MaterialResponse(
+        id=m.id.value,
+        title=m.title,
+        description=m.description,
+        category=m.category,
+        offer_type=m.offer_type,
+        condition=m.condition,
+        quantity=m.quantity,
+        unit=m.unit,
+        price=m.price,
+        longitude=m.longitude,
+        latitude=m.latitude,
+        owner_id=m.owner_id.value,
+        owner_name=m.owner_name,
+        media_urls=m.media_urls,
+        is_active=m.is_active,
+        created_at=m.created_at,
+    )
 
 
 @router.post("/materials", response_model=MaterialResponse, status_code=status.HTTP_201_CREATED)
@@ -42,23 +63,7 @@ async def publish_material(
         media_urls=payload.media_urls,
     )
     res = await use_case.execute(cmd)
-    return MaterialResponse(
-        id=res.id.value,
-        title=res.title,
-        description=res.description,
-        category=res.category,
-        offer_type=res.offer_type,
-        condition=res.condition,
-        quantity=res.quantity,
-        unit=res.unit,
-        price=res.price,
-        longitude=res.longitude,
-        latitude=res.latitude,
-        owner_id=res.owner_id.value,
-        media_urls=res.media_urls,
-        is_active=res.is_active,
-        created_at=res.created_at,
-    )
+    return _to_response(res)
 
 
 @router.get("/materials/search", response_model=list[MaterialResponse])
@@ -83,26 +88,7 @@ async def search_materials(
         limit=limit,
     )
     items = await use_case.execute(query)
-    return [
-        MaterialResponse(
-            id=m.id.value,
-            title=m.title,
-            description=m.description,
-            category=m.category,
-            offer_type=m.offer_type,
-            condition=m.condition,
-            quantity=m.quantity,
-            unit=m.unit,
-            price=m.price,
-            longitude=m.longitude,
-            latitude=m.latitude,
-            owner_id=m.owner_id.value,
-            media_urls=m.media_urls,
-            is_active=m.is_active,
-            created_at=m.created_at,
-        )
-        for m in items
-    ]
+    return [_to_response(m) for m in items]
 
 
 @router.get("/materials/{material_id}", response_model=MaterialResponse)
@@ -114,20 +100,4 @@ async def get_material(
     m = await repo.get_by_id(EntityId(material_id))
     if not m:
         raise NotFoundError(f"Material '{material_id}' no encontrado.")
-    return MaterialResponse(
-        id=m.id.value,
-        title=m.title,
-        description=m.description,
-        category=m.category,
-        offer_type=m.offer_type,
-        condition=m.condition,
-        quantity=m.quantity,
-        unit=m.unit,
-        price=m.price,
-        longitude=m.longitude,
-        latitude=m.latitude,
-        owner_id=m.owner_id.value,
-        media_urls=m.media_urls,
-        is_active=m.is_active,
-        created_at=m.created_at,
-    )
+    return _to_response(m)

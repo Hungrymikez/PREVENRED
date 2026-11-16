@@ -111,3 +111,11 @@ def test_radio_minimo_de_100m_incluye_justo_el_borde(api, act_as, make_user):
     _publish(api, latitude=ORIGIN[1] + 0.00091)  # ~101.2 m: fuera
     assert haversine_meters(*ORIGIN, ORIGIN[0], ORIGIN[1] + 0.000896) < 100
     assert [m["id"] for m in _search(api, radius_meters=100).json()] == [dentro["id"]]
+
+
+def test_publicacion_muestra_solo_nombre_e_inicial_del_dueno(api, act_as, make_user):
+    act_as(make_user(name="Sara Salas Gómez"))
+    creado = _publish(api).json()
+    assert creado["owner_name"] == "Sara S."
+    assert api.get(f"{BASE}/{creado['id']}").json()["owner_name"] == "Sara S."
+    assert _search(api).json()[0]["owner_name"] == "Sara S."

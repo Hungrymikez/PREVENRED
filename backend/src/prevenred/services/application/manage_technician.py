@@ -6,7 +6,7 @@ from prevenred.shared.domain.errors import AuthorizationError, NotFoundError
 from prevenred.shared.domain.ids import EntityId
 
 from ..domain.repositories import TechnicianRepository
-from ..domain.technician import Specialty, TechnicianProfile
+from ..domain.technician import Specialty, TechnicianProfile, VerificationStatus
 
 
 @dataclass(frozen=True)
@@ -80,3 +80,46 @@ class VerifyTechnicianUseCase:
 
         await self._repository.save(profile)
         return profile
+
+
+class GetMyTechnicianProfileUseCase:
+    """CU-17: el técnico consulta su propio perfil (y su estado de verificación)."""
+
+    def __init__(self, repository: TechnicianRepository) -> None:
+        self._repository = repository
+
+    async def execute(self, user: User) -> TechnicianProfile:
+        profile = await self._repository.get_by_user_id(EntityId(user.id))
+        if not profile:
+            raise NotFoundError("Aún no has registrado tu perfil de técnico.")
+        return profile
+
+
+class GetTechnicianProfileUseCase:
+    """CU-19: detalle de un técnico. RN-05: solo el Administrador (o el dueño del perfil)
+    ve perfiles no verificados; para los demás se responde 404."""
+
+    def __init__(self, repository: TechnicianRepository) -> None:
+        self._repository = repository
+
+    async def execute(self, technician_id: str, viewer: User) -> TechnicianProfile:
+        profile = await self._repository.get_by_id(EntityId(technician_id))
+        if profile is None or not (
+            profile.verification_status == VerificationStatus.VERIFIED
+            or viewer.role == Role.ADMIN
+            or profile.user_id == EntityId(viewer.id)
+        ):
+            raise NotFoundError(f"Técnico con ID '{technician_id}' no encontrado.")
+        return profile
+
+
+class ListPendingTechniciansUseCase:
+    """CU-18: el Administrador revisa los perfiles que esperan verificación."""
+
+    def __init__(self, repository: TechnicianRepository) -> None:
+        self._repository = repository
+
+    async def execute(self, admin_user: User, limit: int = 100) -> list[TechnicianProfile]:
+        if admin_user.role != Role.ADMIN:
+            raise AuthorizationError("Solo administradores pueden revisar perfiles técnicos.")
+        return await self._repository.list_by_status(VerificationStatus.PENDING, limit=limit)

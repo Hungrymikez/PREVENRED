@@ -21,3 +21,7 @@ class FieldworkRepository(ABC):
     @abstractmethod
     def list_by_inspector(self, inspector_id: EntityId) -> list[PropertyInspection]:
         """Lista inspecciones de un evaluador."""
+
+    @abstractmethod
+    def list_recent(self, limit: int = 100) -> list[PropertyInspection]:
+        """Lista las inspecciones más recientes de todos los evaluadores (vista del admin)."""

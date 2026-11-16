@@ -1,6 +1,6 @@
 """Rutas HTTP del contexto identity. Solo traducen HTTP <-> casos de uso."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from prevenred.auth.application.login_user import LoginCommand, LoginUser
 from prevenred.auth.application.ports import TokenPayload
@@ -12,6 +12,7 @@ from prevenred.auth.interface.dependencies import (
     get_login_user,
     get_register_user,
     get_user_repository,
+    require_roles,
 )
 from prevenred.auth.interface.schemas import (
     LoginRequest,
@@ -74,3 +75,26 @@ def me(
         role=user.role.value,
         neighborhood=user.neighborhood,
     )
+
+
+@router.get(
+    "/users",
+    response_model=list[UserResponse],
+    summary="Listar cuentas por rol (Administrador)",
+)
+def list_users(
+    role: Role = Query(..., description="Rol a listar, p. ej. inspector"),
+    _admin: TokenPayload = Depends(require_roles(Role.ADMINISTRADOR)),
+    users: UserRepository = Depends(get_user_repository),
+):
+    """Cuentas activas de un rol. Lo usa el Administrador para asignar casos (CU-39)."""
+    return [
+        UserResponse(
+            id=u.id,
+            full_name=u.full_name,
+            email=u.email.value,
+            role=u.role.value,
+            neighborhood=u.neighborhood,
+        )
+        for u in users.list_by_role(role)
+    ]

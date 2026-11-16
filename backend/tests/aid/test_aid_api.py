@@ -72,7 +72,7 @@ def test_matching_por_ciudadano_responde_403(api, act_as, make_user):
     assert r.status_code == 403
 
 
-def test_matching_end_to_end_marca_ambos_como_emparejados(api, act_as, make_user, motor_db):
+def test_matching_end_to_end_conserva_el_sobrante_de_la_oferta(api, act_as, make_user, motor_db):
     act_as(make_user())
     need_id = _need(api).json()["id"]
     offer_id = _offer(api).json()["id"]
@@ -84,9 +84,15 @@ def test_matching_end_to_end_marca_ambos_como_emparejados(api, act_as, make_user
     assert (match["need_id"], match["offer_id"]) == (need_id, offer_id)
     assert match["matched_quantity"] == 10  # min(necesidad, oferta)
     assert match["matched_by"] == admin.id
-    assert motor_db["aid_needs"]._col.find_one()["status"] == "EMPAREJADO"
-    assert motor_db["aid_inventory"]._col.find_one()["status"] == "EMPAREJADO"
-    # Segunda corrida: ya no hay pendientes -> lista vacía
+    need_doc = motor_db["aid_needs"]._col.find_one()
+    offer_doc = motor_db["aid_inventory"]._col.find_one()
+    assert need_doc["status"] == "EMPAREJADO"
+    assert need_doc["remaining_quantity"] == 0
+    # La oferta tenía 25: quedan 15 disponibles y sigue PENDIENTE (no se pierde el sobrante)
+    assert offer_doc["status"] == "PENDIENTE"
+    assert offer_doc["available_quantity"] == 15
+    assert offer_doc["quantity"] == 25
+    # Segunda corrida: no hay necesidades pendientes -> lista vacía
     assert api.post(f"{BASE}/matching/run").json() == []
 
 
@@ -241,3 +247,75 @@ async def test_repositorio_filtra_pendientes_por_categoria(motor_db):
     assert [n.id for n in await repo.list_pending_needs(AidCategory.ALIMENTOS)] == [comida.id]
     assert [o.id for o in await repo.list_pending_offers(AidCategory.AGUA)] == [oferta_agua.id]
     assert len(await repo.list_pending_needs()) == 2
+
+
+def test_mis_solicitudes_solo_muestra_las_propias(api, act_as, make_user):
+    """CU-32: cada persona ve sus solicitudes de ayuda, no las de otros."""
+    act_as(make_user())
+    ajena = _need(api).json()
+    yo = act_as(make_user())
+    propia = _need(api).json()
+
+    mias = api.get(f"{BASE}/needs/mine").json()
+    assert [n["id"] for n in mias] == [propia["id"]]
+    assert mias[0]["requester_id"] == yo.id
+    assert ajena["id"] not in {n["id"] for n in mias}
+
+
+def test_mis_ofertas_solo_muestra_las_propias(api, act_as, make_user):
+    """CU-33: cada donante ve sus ofertas, no las de otros."""
+    act_as(make_user())
+    ajena = _offer(api).json()
+    yo = act_as(make_user())
+    propia = _offer(api).json()
+
+    mias = api.get(f"{BASE}/offers/mine").json()
+    assert [o["id"] for o in mias] == [propia["id"]]
+    assert mias[0]["donor_id"] == yo.id
+    assert mias[0]["available_quantity"] == 25
+    assert ajena["id"] not in {o["id"] for o in mias}
+
+
+@pytest.mark.parametrize("ruta", ["needs/pending", "offers/pending"])
+def test_pendientes_solo_para_admin(api, act_as, make_user, ruta):
+    act_as(make_user(Role.CIUDADANO))
+    assert api.get(f"{BASE}/{ruta}").status_code == 403
+    act_as(make_user(Role.INSPECTOR))
+    assert api.get(f"{BASE}/{ruta}").status_code == 403
+
+
+def test_admin_ve_pendientes_y_el_sobrante_tras_emparejar(api, act_as, make_user):
+    act_as(make_user())
+    _need(api)
+    offer_id = _offer(api).json()["id"]
+    act_as(make_user(Role.ADMIN))
+
+    assert len(api.get(f"{BASE}/needs/pending").json()) == 1
+    assert len(api.get(f"{BASE}/offers/pending").json()) == 1
+
+    api.post(f"{BASE}/matching/run")
+    assert api.get(f"{BASE}/needs/pending").json() == []
+    [oferta] = api.get(f"{BASE}/offers/pending").json()
+    assert oferta["id"] == offer_id
+    assert oferta["available_quantity"] == 15
+
+
+@pytest.mark.asyncio
+async def test_documentos_antiguos_sin_cantidad_disponible(motor_db):
+    """Ofertas/necesidades guardadas antes del arreglo: la cantidad se deduce del estado."""
+    repo = MongoAidRepository(motor_db)
+    pendiente, emparejada = _mk_offer(), _mk_offer()
+    for offer in (pendiente, emparejada):
+        await repo.save_offer(offer)
+    motor_db["aid_inventory"]._col.update_many({}, {"$unset": {"available_quantity": ""}})
+    motor_db["aid_inventory"]._col.update_one(
+        {"_id": emparejada.id.value}, {"$set": {"status": "EMPAREJADO"}}
+    )
+    need = _mk_need()
+    await repo.save_need(need)
+    motor_db["aid_needs"]._col.update_many({}, {"$unset": {"remaining_quantity": ""}})
+
+    [offer] = await repo.list_pending_offers()
+    assert offer.id == pendiente.id and offer.available_quantity == 5
+    [loaded] = await repo.list_pending_needs()
+    assert loaded.remaining_quantity == 5

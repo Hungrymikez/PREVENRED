@@ -49,6 +49,9 @@ class InMemoryVolunteerRepository(VolunteerRepository):
     ) -> list[VolunteerAssignment]:
         return [a for a in self.assignments.values() if a.volunteer_id == volunteer_id]
 
+    async def list_available(self, limit: int = 100) -> list[VolunteerProfile]:
+        return [p for p in self.profiles.values() if p.is_available][:limit]
+
 
 @pytest.fixture
 def volunteer_user() -> User:

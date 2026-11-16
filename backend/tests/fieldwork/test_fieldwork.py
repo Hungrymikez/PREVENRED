@@ -7,6 +7,7 @@ import pytest
 from prevenred.auth.application.ports import TokenPayload
 from prevenred.auth.domain.role import Role
 from prevenred.auth.infrastructure.jwt_token_service import JwtTokenService
+from prevenred.fieldwork.application.list_inspections import ListInspections
 from prevenred.fieldwork.application.submit_inspection import (
     SubmitInspection,
     SubmitInspectionCommand,
@@ -37,6 +38,9 @@ class InMemoryFieldworkRepository(FieldworkRepository):
 
     def list_by_inspector(self, inspector_id: str) -> list[PropertyInspection]:
         return [i for i in self.items.values() if i.inspector_id == inspector_id]
+
+    def list_recent(self, limit: int = 100) -> list[PropertyInspection]:
+        return list(self.items.values())[:limit]
 
 
 def _inspector() -> TokenPayload:
@@ -221,3 +225,70 @@ def test_api_submit_as_inspector(client) -> None:
     assert data["habitability"] == "EVACUACION"
     assert data["damage_level"] == "SEVERO"
     assert data["neighborhood"] == "Centro"
+
+
+# ---------- CU-35: consultar inspecciones ----------
+
+_BODY = {
+    "property_address": "Calle 14 # 9-30",
+    "neighborhood": "Cuba",
+    "residents_count": 3,
+    "damage_level": "MODERADO",
+    "habitability": "RESTRINGIDO",
+    "technical_notes": "Grietas en fachada",
+    "longitude": -75.71,
+    "latitude": 4.79,
+}
+
+
+def _auth(user_id: str, role: Role) -> dict[str, str]:
+    jwt = JwtTokenService(get_settings()).issue(user_id, role)
+    return {"Authorization": f"Bearer {jwt}"}
+
+
+def test_list_inspections_use_case_by_role() -> None:
+    repo = InMemoryFieldworkRepository()
+    inspector = _inspector()
+    submit = SubmitInspection(repo, MagicMock())
+    for who in (inspector, _inspector()):
+        submit.execute(
+            SubmitInspectionCommand(
+                property_address="Calle 14 # 9-30",
+                neighborhood="Cuba",
+                residents_count=1,
+                damage_level=DamageLevel.LEVE,
+                habitability=HabitabilityStatus.HABITABLE,
+                technical_notes="",
+                longitude=-75.7,
+                latitude=4.8,
+                inspector=who,
+            )
+        )
+    use_case = ListInspections(repo)
+    assert len(use_case.execute(inspector)) == 1
+    assert len(use_case.execute(TokenPayload(user_id=new_id(), role=Role.ADMINISTRADOR))) == 2
+    with pytest.raises(ForbiddenError):
+        use_case.execute(_citizen())
+
+
+def test_api_list_inspector_sees_own_and_admin_sees_all(client) -> None:
+    mine, other = new_id(), new_id()
+    for who in (mine, other):
+        r = client.post(
+            "/api/v1/fieldwork/inspections", headers=_auth(who, Role.INSPECTOR), json=_BODY
+        )
+        assert r.status_code == 201
+
+    own = client.get("/api/v1/fieldwork/inspections", headers=_auth(mine, Role.INSPECTOR))
+    assert own.status_code == 200
+    assert [i["inspector_id"] for i in own.json()] == [mine]
+
+    admin = client.get("/api/v1/fieldwork/inspections", headers=_auth(new_id(), Role.ADMINISTRADOR))
+    assert admin.status_code == 200
+    assert len(admin.json()) == 2
+
+
+def test_api_list_forbidden_for_citizen_and_anonymous(client) -> None:
+    assert client.get("/api/v1/fieldwork/inspections").status_code in (401, 403)
+    r = client.get("/api/v1/fieldwork/inspections", headers=_auth(new_id(), Role.CIUDADANO))
+    assert r.status_code == 403

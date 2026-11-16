@@ -43,6 +43,22 @@ class AidOffer(Entity):
     status: AidStatus
     created_at: datetime
     source_material_id: EntityId | None = None
+    # CU-41: cantidad que aún no se ha comprometido en un emparejamiento.
+    available_quantity: float | None = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.available_quantity is None:
+            self.available_quantity = self.quantity if self.status == AidStatus.PENDIENTE else 0.0
+
+    def allocate(self, amount: float) -> None:
+        """CU-42: compromete parte de la oferta; solo queda EMPAREJADA cuando se agota."""
+        if amount <= 0 or amount > (self.available_quantity or 0):
+            raise DomainValidationError("La cantidad a comprometer excede lo disponible.")
+        self.available_quantity = round((self.available_quantity or 0) - amount, 6)
+        if self.available_quantity <= 0:
+            self.available_quantity = 0.0
+            self.status = AidStatus.EMPAREJADO
 
     @classmethod
     def create(
@@ -90,6 +106,22 @@ class AidNeed(Entity):
     latitude: float
     status: AidStatus
     created_at: datetime
+    # CU-42: cantidad que todavía falta por cubrir con donaciones.
+    remaining_quantity: float | None = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.remaining_quantity is None:
+            self.remaining_quantity = self.quantity if self.status == AidStatus.PENDIENTE else 0.0
+
+    def fulfil(self, amount: float) -> None:
+        """CU-42: cubre parte de la necesidad; solo queda EMPAREJADA cuando se cubre toda."""
+        if amount <= 0 or amount > (self.remaining_quantity or 0):
+            raise DomainValidationError("La cantidad a cubrir excede lo pendiente.")
+        self.remaining_quantity = round((self.remaining_quantity or 0) - amount, 6)
+        if self.remaining_quantity <= 0:
+            self.remaining_quantity = 0.0
+            self.status = AidStatus.EMPAREJADO
 
     @classmethod
     def create(

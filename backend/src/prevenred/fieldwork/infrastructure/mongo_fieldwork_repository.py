@@ -79,3 +79,7 @@ class MongoFieldworkRepository(FieldworkRepository):
             "inspectedAt", -1
         )
         return [_to_entity(doc) for doc in cursor]
+
+    def list_recent(self, limit: int = 100) -> list[PropertyInspection]:
+        cursor = self._collection.find({}).sort("inspectedAt", -1).limit(limit)
+        return [_to_entity(doc) for doc in cursor]

@@ -16,6 +16,11 @@ from ..domain.aid import (
 from ..domain.repositories import AidRepository
 
 
+def _optional_float(value: Any) -> float | None:
+    """Documentos antiguos no traen la cantidad disponible: el dominio la deduce."""
+    return float(value) if value is not None else None
+
+
 class MongoAidRepository(AidRepository):
     def __init__(self, database: AsyncIOMotorDatabase) -> None:
         self._offers = database["aid_inventory"]
@@ -26,6 +31,7 @@ class MongoAidRepository(AidRepository):
         await self._offers.create_index([("location", GEOSPHERE)])
         await self._offers.create_index("status")
         await self._offers.create_index("category")
+        await self._offers.create_index("donor_id")
         await self._needs.create_index([("location", GEOSPHERE)])
         await self._needs.create_index("status")
         await self._needs.create_index("category")
@@ -44,6 +50,7 @@ class MongoAidRepository(AidRepository):
             "status": o.status.value,
             "created_at": o.created_at,
             "source_material_id": o.source_material_id.value if o.source_material_id else None,
+            "available_quantity": o.available_quantity,
         }
 
     def _doc_to_offer(self, d: dict[str, Any]) -> AidOffer:
@@ -61,6 +68,7 @@ class MongoAidRepository(AidRepository):
             status=AidStatus(d["status"]),
             created_at=d["created_at"],
             source_material_id=source_id,
+            available_quantity=_optional_float(d.get("available_quantity")),
         )
 
     def _need_to_doc(self, n: AidNeed) -> dict[str, Any]:
@@ -75,6 +83,7 @@ class MongoAidRepository(AidRepository):
             "location": {"type": "Point", "coordinates": [n.longitude, n.latitude]},
             "status": n.status.value,
             "created_at": n.created_at,
+            "remaining_quantity": n.remaining_quantity,
         }
 
     def _doc_to_need(self, d: dict[str, Any]) -> AidNeed:
@@ -91,6 +100,7 @@ class MongoAidRepository(AidRepository):
             latitude=float(coords[1]),
             status=AidStatus(d["status"]),
             created_at=d["created_at"],
+            remaining_quantity=_optional_float(d.get("remaining_quantity")),
         )
 
     async def save_offer(self, offer: AidOffer) -> None:
@@ -105,6 +115,11 @@ class MongoAidRepository(AidRepository):
         docs = await self._offers.find(q).to_list(length=100)
         return [self._doc_to_offer(d) for d in docs]
 
+    async def list_offers_by_donor(self, donor_id: EntityId) -> list[AidOffer]:
+        """CU-33: ofertas de un donante, más recientes primero."""
+        cursor = self._offers.find({"donor_id": donor_id.value}).sort("created_at", -1)
+        return [self._doc_to_offer(d) for d in await cursor.to_list(length=100)]
+
     async def save_need(self, need: AidNeed) -> None:
         await self._needs.replace_one({"_id": need.id.value}, self._need_to_doc(need), upsert=True)
 
@@ -114,6 +129,11 @@ class MongoAidRepository(AidRepository):
             q["category"] = category.value
         docs = await self._needs.find(q).to_list(length=100)
         return [self._doc_to_need(d) for d in docs]
+
+    async def list_needs_by_requester(self, requester_id: EntityId) -> list[AidNeed]:
+        """CU-32: las solicitudes de ayuda de una persona, más recientes primero."""
+        cursor = self._needs.find({"requester_id": requester_id.value}).sort("created_at", -1)
+        return [self._doc_to_need(d) for d in await cursor.to_list(length=100)]
 
     async def save_match(self, match: DonationMatch) -> None:
         doc = {

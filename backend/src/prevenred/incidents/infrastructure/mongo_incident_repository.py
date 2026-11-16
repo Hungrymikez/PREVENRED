@@ -71,6 +71,7 @@ def _to_document(incident: Incident) -> dict[str, Any]:
         ],
         "createdAt": incident.created_at,
         "created_at": incident.created_at,
+        "reportedAt": incident.reported_at or incident.created_at,
         "updatedAt": incident.updated_at or incident.created_at,
         "updated_at": incident.updated_at or incident.created_at,
     }
@@ -103,6 +104,7 @@ def _to_entity(doc: dict[str, Any]) -> Incident:
     photos = doc.get("photos") or doc.get("media_urls") or []
     created_at = doc.get("createdAt") or doc.get("created_at") or utcnow()
     updated_at = doc.get("updatedAt") or doc.get("updated_at")
+    reported_at = doc.get("reportedAt")
 
     return Incident(
         id=str(doc["_id"]),
@@ -119,6 +121,8 @@ def _to_entity(doc: dict[str, Any]) -> Incident:
         history=history,
         assigned_to=str(assigned) if assigned else None,
         updated_at=as_utc(updated_at) if updated_at else None,
+        client_id=doc.get("clientId"),
+        reported_at=as_utc(reported_at) if reported_at else as_utc(created_at),
     )
 
 
@@ -132,6 +136,8 @@ class MongoIncidentRepository(IncidentRepository):
         if incident.updated_at is None:
             incident.updated_at = utcnow()
         doc = _to_document(incident)
+        if incident.client_id:
+            doc["clientId"] = incident.client_id
         self._collection.replace_one(
             {"_id": doc["_id"]},
             doc,
@@ -148,8 +154,13 @@ class MongoIncidentRepository(IncidentRepository):
         status: IncidentStatus | None = None,
         limit: int = 50,
         reported_by: str | None = None,
+        assigned_to: str | None = None,
     ) -> list[Incident]:
         query: dict[str, Any] = {}
+        if assigned_to is not None:
+            query["assignedTo"] = (
+                ObjectId(assigned_to) if ObjectId.is_valid(assigned_to) else assigned_to
+            )
         if status is not None:
             query["status"] = status.value
         if reported_by is not None:
@@ -158,3 +169,14 @@ class MongoIncidentRepository(IncidentRepository):
             )
         cursor = self._collection.find(query).sort("createdAt", -1).limit(limit)
         return [_to_entity(doc) for doc in cursor]
+
+    def get_by_client_id(self, reported_by: EntityId, client_id: str) -> Incident | None:
+        reporter = ObjectId(reported_by) if ObjectId.is_valid(reported_by) else reported_by
+        doc = self._collection.find_one({"clientId": client_id, "reportedBy": reporter})
+        return _to_entity(doc) if doc else None
+
+    def get_by_case_number(self, case_number: str) -> Incident | None:
+        doc = self._collection.find_one(
+            {"$or": [{"caseId": case_number}, {"case_number": case_number}]}
+        )
+        return _to_entity(doc) if doc else None

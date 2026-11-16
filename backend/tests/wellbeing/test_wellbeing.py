@@ -179,7 +179,17 @@ async def test_community_indicators_k_anonymity(test_user: User, other_user: Use
             )
         )
 
-    indicators = await use_case.get_community_indicators()
+    admin = User.register(
+        email=Email("admin.bienestar@pereira.gov.co"),
+        raw_password="SecurePass2026*",
+        name="Ana Admin",
+        role=Role.ADMIN,
+        hasher=Argon2PasswordHasher(),
+    )
+    with pytest.raises(AuthorizationError):
+        await use_case.get_community_indicators(test_user)
+
+    indicators = await use_case.get_community_indicators(admin)
     assert len(indicators) == 1
     assert indicators[0]["neighborhood"] == "Cuba"
     assert indicators[0]["sample_count"] == 3

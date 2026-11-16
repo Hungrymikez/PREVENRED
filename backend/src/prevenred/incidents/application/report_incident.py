@@ -1,6 +1,7 @@
 """CU-29 · Reportar incidente de emergencia."""
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from prevenred.auth.application.ports import TokenPayload
 from prevenred.shared.application.event_bus import EventBus
@@ -21,6 +22,8 @@ class ReportIncidentCommand:
     latitude: float
     reporter: TokenPayload
     media_urls: list[str] | None = None
+    client_id: str | None = None
+    reported_at: datetime | None = None
 
 
 class ReportIncident:
@@ -31,6 +34,14 @@ class ReportIncident:
         self._event_bus = event_bus
 
     def execute(self, command: ReportIncidentCommand) -> Incident:
+        # CU-37 / H-07: si el celular reintenta un reporte que ya llegó, se devuelve el mismo
+        # caso en vez de crear un duplicado.
+        if command.client_id:
+            existing = self._repository.get_by_client_id(
+                command.reporter.user_id, command.client_id.strip()
+            )
+            if existing is not None:
+                return existing
         incident = Incident.create(
             incident_type=command.incident_type,
             severity=command.severity,
@@ -39,6 +50,8 @@ class ReportIncident:
             latitude=command.latitude,
             reported_by=command.reporter.user_id,
             media_urls=command.media_urls,
+            client_id=command.client_id,
+            reported_at=command.reported_at,
         )
         self._repository.save(incident)
         self._event_bus.publish(

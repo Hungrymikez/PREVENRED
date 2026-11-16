@@ -80,9 +80,10 @@ def citizen_user() -> User:
 
 
 @pytest.mark.asyncio
-async def test_dashboard_endpoint_structure() -> None:
+async def test_dashboard_endpoint_structure(admin_user: User) -> None:
     mock_db = MockAsyncDatabase()
     app.dependency_overrides[get_database] = lambda: mock_db
+    app.dependency_overrides[get_current_user] = lambda: admin_user
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -138,5 +139,19 @@ async def test_export_incidents_csv_forbidden_for_citizen(citizen_user: User) ->
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             response = await ac.get("/api/v1/reporting/export/incidents/csv")
             assert response.status_code in (401, 403)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_requires_admin(citizen_user: User) -> None:
+    """CU-45: el tablero municipal no es público ni para ciudadanos."""
+    app.dependency_overrides[get_database] = lambda: MockAsyncDatabase()
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            assert (await ac.get("/api/v1/reporting/dashboard")).status_code == 401
+            app.dependency_overrides[get_current_user] = lambda: citizen_user
+            assert (await ac.get("/api/v1/reporting/dashboard")).status_code == 403
     finally:
         app.dependency_overrides.clear()

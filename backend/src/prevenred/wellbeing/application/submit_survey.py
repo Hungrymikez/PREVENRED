@@ -3,8 +3,9 @@
 from dataclasses import dataclass
 from typing import Any
 
+from prevenred.auth.domain.role import Role
 from prevenred.auth.domain.user import User
-from prevenred.shared.domain.errors import AuthorizationError
+from prevenred.shared.domain.errors import AuthorizationError, NotFoundError
 from prevenred.shared.domain.ids import EntityId
 
 from ..domain.consent import WellbeingConsent
@@ -48,6 +49,13 @@ class WellbeingUseCase:
         await self._repository.save_consent(consent)
         return consent
 
+    async def get_my_consent(self, user: User) -> WellbeingConsent:
+        # CU-24: la pantalla consulta si la persona ya aceptó (y no revocó) el consentimiento.
+        consent = await self._repository.get_consent_by_user_id(EntityId(user.id))
+        if not consent or consent.is_revoked:
+            raise NotFoundError("Aún no has otorgado el consentimiento de Mente Resiliente.")
+        return consent
+
     async def submit_survey(self, command: SubmitSurveyCommand) -> SurveyResult:
         # RF-14, RN-05: Exigir consentimiento expreso previo
         user_id = EntityId(command.user.id)
@@ -85,6 +93,11 @@ class WellbeingUseCase:
             mood_score=survey.mood_score,
         )
 
-    async def get_community_indicators(self) -> list[dict[str, Any]]:
+    async def get_community_indicators(self, user: User) -> list[dict[str, Any]]:
+        # CU-26: solo el Administrador consulta los indicadores comunitarios.
+        if user.role != Role.ADMIN:
+            raise AuthorizationError(
+                "Solo administradores pueden consultar los indicadores de bienestar."
+            )
         # RF-17: Indicadores agregados con umbral mínimo de 3 respuestas para k-anonimato
         return await self._repository.get_all_neighborhood_averages(min_samples=3)

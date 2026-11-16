@@ -19,8 +19,13 @@ router = APIRouter(prefix="/reporting", tags=["Reporting & Official Dashboards"]
 
 @router.get("/dashboard", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
+    current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncIOMotorDatabase, Depends(get_database)],
 ) -> DashboardSummaryResponse:
+    """CU-45: indicadores oficiales de la ciudad. Solo Administrador."""
+    if current_user.role != Role.ADMIN:
+        raise AuthorizationError("Solo administradores pueden consultar el tablero municipal.")
+
     # 1. Indicadores de Incidentes
     incidents_col = db["incidents"]
     total_inc = await incidents_col.count_documents({})

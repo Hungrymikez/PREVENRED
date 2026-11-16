@@ -37,6 +37,7 @@ class AidNeedResponse(BaseModel):
     latitude: float
     status: AidStatus
     created_at: datetime
+    remaining_quantity: float | None = None
 
 
 class AidOfferResponse(BaseModel):
@@ -51,6 +52,7 @@ class AidOfferResponse(BaseModel):
     status: AidStatus
     created_at: datetime
     source_material_id: str | None = None
+    available_quantity: float | None = None
 
 
 class DonationMatchResponse(BaseModel):

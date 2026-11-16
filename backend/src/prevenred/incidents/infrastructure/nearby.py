@@ -1,4 +1,5 @@
 """Consultas de incidentes cercanos sobre MongoDB real ($nearSphere)."""
+
 from pymongo.database import Database
 
 from prevenred.incidents.infrastructure.indexes import COLLECTION
@@ -14,11 +15,15 @@ def find_incidents_near(
 
     Exige el índice 2dsphere de location (se crea al arrancar la aplicación).
     """
-    return list(db[COLLECTION].find({
-        "location": {
-            "$nearSphere": {
-                "$geometry": {"type": "Point", "coordinates": [longitude, latitude]},
-                "$maxDistance": max_distance_meters,
+    return list(
+        db[COLLECTION].find(
+            {
+                "location": {
+                    "$nearSphere": {
+                        "$geometry": {"type": "Point", "coordinates": [longitude, latitude]},
+                        "$maxDistance": max_distance_meters,
+                    }
+                }
             }
-        }
-    }))
+        )
+    )

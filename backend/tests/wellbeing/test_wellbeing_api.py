@@ -2,6 +2,7 @@
 
 import pytest
 
+from prevenred.auth.domain.role import Role
 from prevenred.shared.domain.errors import DomainValidationError
 from prevenred.shared.domain.ids import EntityId
 from prevenred.wellbeing.domain.consent import WellbeingConsent
@@ -166,11 +167,50 @@ def test_indicadores_respetan_umbral_minimo_de_tres_muestras(api, act_as, make_u
     for mood, text in ((1, "no quiero vivir"), (4, ""), (5, "")):  # exactamente 3: se publica
         responder("Cuba", mood, text)
 
+    act_as(make_user(Role.ADMIN))
     r = api.get(f"{BASE}/indicators")
     assert r.status_code == 200
     assert r.json() == [
         {"neighborhood": "Cuba", "sample_count": 3, "average_mood": 3.33, "crisis_alerts": 1}
     ]
+
+
+@pytest.mark.parametrize("role", [Role.CIUDADANO, Role.INSPECTOR, Role.TECNICO])
+def test_indicadores_solo_para_administradores(api, act_as, make_user, role):
+    """CU-26: los indicadores comunitarios son del tablero del Administrador."""
+    act_as(make_user(role))
+    r = api.get(f"{BASE}/indicators")
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "forbidden"
+
+
+# ---------- Consultar el consentimiento propio (CU-24) ----------
+
+
+def test_consentimiento_propio_responde_404_si_no_existe(api, act_as, make_user):
+    act_as(make_user())
+    r = api.get(f"{BASE}/consent/me")
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "not_found"
+
+
+def test_consentimiento_propio_devuelve_el_vigente(api, act_as, make_user):
+    user = act_as(make_user())
+    api.post(f"{BASE}/consent", json={"terms_version": "v1.0"})
+    r = api.get(f"{BASE}/consent/me")
+    assert r.status_code == 200
+    assert r.json()["user_id"] == user.id
+    assert r.json()["terms_version"] == "v1.0"
+    assert r.json()["is_revoked"] is False
+
+
+def test_consentimiento_propio_revocado_responde_404(api, act_as, make_user, motor_db):
+    user = act_as(make_user())
+    api.post(f"{BASE}/consent", json={})
+    motor_db["wellbeing_consents"]._col.update_one(
+        {"user_id": user.id}, {"$set": {"is_revoked": True}}
+    )
+    assert api.get(f"{BASE}/consent/me").status_code == 404
 
 
 def test_lineas_de_ayuda_son_publicas(api):
