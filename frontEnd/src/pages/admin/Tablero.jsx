@@ -6,6 +6,12 @@ import { mensajeDeError } from '@/api/client'
 import { Alerta } from '@/components/ui/Alerta'
 import { Boton } from '@/components/ui/Boton'
 import { Cargando, SinResultados } from '@/components/ui/Estados'
+import { ProyeccionPendientes } from './ProyeccionPendientes'
+
+/** B₀ del modelo: todos los incidentes que todavía no están en estado RESUELTO. */
+function casosSinResolver({ total_incidents, incidents_by_status = {} }) {
+  return total_incidents - (incidents_by_status.RESUELTO ?? 0)
+}
 
 const HABITABILIDAD = {
   HABITABLE: 'Habitable',
@@ -54,7 +60,10 @@ export default function Tablero() {
         ) : tablero.error ? (
           <Alerta tipo="error">{mensajeDeError(tablero.error)}</Alerta>
         ) : (
-          <ResumenMunicipal datos={tablero.data} />
+          <>
+            <ResumenMunicipal datos={tablero.data} />
+            <ProyeccionPendientes pendientes={casosSinResolver(tablero.data)} />
+          </>
         )}
       </div>
 

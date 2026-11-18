@@ -7,6 +7,8 @@ import { MapContainer, TileLayer } from 'react-leaflet'
 import { CENTRO_PEREIRA, ZOOM_INICIAL } from '@/utils/mapa'
 
 // Con Vite, Leaflet no encuentra solo las imágenes del marcador: se le indican aquí.
+// Sin borrar _getIconUrl, Leaflet le antepone su propia ruta y la imagen sale rota.
+delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({ iconRetinaUrl: iconoRetina, iconUrl: icono, shadowUrl: sombra })
 
 /**

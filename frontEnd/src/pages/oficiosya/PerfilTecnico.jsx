@@ -11,6 +11,7 @@ import { Boton } from '@/components/ui/Boton'
 import { Cargando } from '@/components/ui/Estados'
 import { Etiqueta } from '@/components/ui/Etiqueta'
 import { Volver } from '@/components/ui/Volver'
+import { LlegadaTecnico } from './LlegadaTecnico'
 import { Valoracion } from './Valoracion'
 
 /** CU-19 paso 5: perfil del técnico, con contacto por WhatsApp (CU-22). */
@@ -75,6 +76,8 @@ export default function PerfilTecnico() {
                 </Mapa>
               </section>
             </aside>
+
+            <LlegadaTecnico tecnico={t} />
           </div>
         )}
       </div>
